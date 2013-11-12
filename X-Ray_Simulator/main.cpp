@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
 	//returns 0 if succesfull
 	//returns 1 if no path was given
 	//returns 2 if no valid path was given
-	int check = 3;
+	/*int check = 3;
 	std::ifstream ifile;
 	if (experiment_path.c_str()) {
 		ifile.open(experiment_path.c_str());
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
 
 	if (check != 0) {
 		std::cout << "error loading experiment error code: " << check << " from path" << experiment_path << std::endl;
-	} else {
+	} else {*/
 
 	double steps_h = (h_max-h_min)/h_step;
 	double steps_l = (l_max-l_min)/l_step;
@@ -141,4 +141,4 @@ int main(int argc, char* argv[])
 		//}
 		//std::cout << std::endl;
 	}
-}}
+}//}

@@ -1,12 +1,12 @@
 # variables to note the compiler and options
 FCOMP := g++
-DEBUG := 
+NODEBUG := 
 
 # set the compiler flags depending on whether we are in DEBUG mode
-ifdef DEBUG
-  FFLAGS := -g
-else
+ifdef NODEBUG
   FFLAGS := -O
+else
+  FFLAGS := -g
 endif
 
 # the list of source files that need to be compiled to make the executable
