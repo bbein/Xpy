@@ -366,6 +366,7 @@ std::complex<double> Film::get_reflection(Vec3D q, double wavelength) {
 			reflection = two*reflection/(one+sqrt(one+two*two*(reflection.real()*reflection.real()+reflection.imag()*reflection.imag())));
 		}
 	return reflection;
+
 }
 
 std::complex<double> Film::get_reflection_sum(Vec3D q, double wavelength, int n) {
