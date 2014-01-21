@@ -9,8 +9,8 @@ wavelength = 1.5409E-10
 direct = 1.0E16
 background = 1
 
-STO =  xpy.SimpleCrystalStructure(path = "../Perovskites/STO.str")
-PTO =  xpy.SimpleCrystalStructure(path = "../Perovskites/PTOs.str")
+STO =  xpy.SimpleCrystalStructure(path = xpy.scriptpath+"Perovskites/STO.str")
+PTO =  xpy.SimpleCrystalStructure(path = xpy.scriptpath+"Perovskites/PTOs.str")
 substrate =  xpy.Film(STO)
 film = xpy.ThinFilm(PTO)
 

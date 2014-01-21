@@ -5,7 +5,7 @@ import cmath as mc
 words = __file__.split("/")
 scriptpath = ""
 for i in range(len(words)):
-    if ( i == len(words)-2): break
+    if ( i == len(words)-3): break
     scriptpath += words[i]+"/"
 
 ####################
