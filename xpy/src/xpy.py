@@ -292,10 +292,11 @@ class SimpleCrystalStructure(object):
             self._formfactor_ = 0.0 + 0.0j
             mq = m.sqrt(sum([x**2 for x in q]))
             for atom in self.atoms:
+                multi = 0.0
                 for i in range(len(q)):
-                    multi = atom.pos[i]*q[i] 
+                    multi += atom.pos[i]*q[i] 
                 self._formfactor_ +=(atom.form.get_value(mq) *
-                                   mc.exp(-1.0j * multi)
+                                   mc.exp(1.0j * multi)
                                    )
             self._q_ = q[:]
         return self._formfactor_   
@@ -357,8 +358,9 @@ class Film (object):
         """calculates the scattering amplitude"""
         #where is a^2 comming from?
         a = self.crystal.lattice_parameters[0]
+        b = self.crystal.lattice_parameters[1]
         R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
-        amp1d = 4 * m.pi * R / m.sqrt(sum([x**2 for x in self._q_])) / a / a
+        amp1d = 4 * m.pi * R / m.sqrt(sum([x**2 for x in self._q_])) / a / b
         self._amplitude_ = 0.0 + 1j*(amp1d);
 
     def _calc_reflection_(self):
@@ -393,7 +395,36 @@ class Film (object):
         """
         if (self._check_q_l_(q, wavelength)):
             self._calc_reflection_()
-        return self._reflection_;
+        return self._reflection_
+
+#########
+# Layer #
+#########
+
+class Layer(Film):
+        
+    def __init__(self, crystal1, crystal2, damping=5.98E+4):
+        """initializes the class data and checks data types
+          
+           crystal1 first SimpleCrystalStructure for the layer
+           crystal2 second SimpleCrystalStructure for the layer
+           damping for the film 
+        """
+    pass
+    
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           crystal1 -> SimpleCrystalstructure
+           crystal2 -> SimpleCrystalstructure
+           damping -> float 
+        """
+        assert isinstance(self.crystal1, SimpleCrystalStructure) , 'crystal1 needs to be a SimpleCrystalstructure'
+        assert isinstance(self.crystal2, SimpleCrystalStructure) , 'crystal2 needs to be a SimpleCrystalstructure'
+        assert isinstance(self.damping, float) , 'damping needs to be a float'
+        
+    _Layer__type_check__ = __type_check__ #private copy of the function to avoid overload
+
 
 ############
 # ThinFilm #
@@ -413,39 +444,35 @@ class ThinFilm(Film):
         self._icnq_ = 0.0+0.0j
         self._phaseshift_ = 0.0+0.0j
         self._ThinFilm__type_check__()
+        self.delta = 0
 
     def __type_check__(self):
         """checks the class data to have the right types
         
-           layers -> float 
+           layers -> int 
         """
-        assert isinstance(self._layers_, (float, int)) , 'layers needs to be a number'
+        assert isinstance(self._layers_, (int)) , 'layers needs to be a int'
         
     _ThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
     
     def _set_icq_(self):
-        """recalculates the values for i*(latticeparameters*q)"""
+        """recalculates the values for i*(latticeparameters*q*n)"""
         super(ThinFilm, self)._set_icq_()
-        c = self.crystal.lattice_parameters[2]
-        factor = (4 * m.pi / self._wavelength_ * self.damping / 
-                 m.sqrt(sum([x**2 for x in self._q_]))
-                 )
-        self._icnq_ = (-1.0j * self._layers_ * c * self._q_[2] - 
-                     self._layers_ * c * factor
-                     )  
+        
+        self._icnq_ =  self._layers_ * self._icq_
     
     def _calc_reflection_(self):
         """calculates the reflection and phase shift of the Film."""
         self._set_icq_()
-        self._phaseshift_ = mc.exp(self._icnq_)
         self._calc_amplitude_()
         self._reflection_ = (self._amplitude_ * 
                              self.crystal.get_structure_factor(self._q_) * 
-                             (1-self._phaseshift_) / (#(1-mc.exp(self._iaq_))* 
+                             (1-mc.exp(self._icnq_)) / (#(1-mc.exp(self._iaq_))* 
                                                        #(1-mc.exp(self._ibq_))* 
                                                        (1-mc.exp(self._icq_))
                                                       )
-                            )    
+                            )
+        self._phaseshift_ = mc.exp(self._icnq_ + self.delta * self._icq_)      
 
     def get_phase_shift(self,  q, wavelength):
         """returns the phase of the film.
@@ -456,15 +483,19 @@ class ThinFilm(Film):
         if (self._check_q_l_, q, wavelength):
             self._calc_reflection_()
         return self._phaseshift_
-    
+
+################
+# SuperLattice #
+################
+
 class SuperLattice(object):
-    
+        
     def __init__(self, film1, film2, bilayers=1):
         """initializes the class data and checks data types
           
-           crystal: SimpleCrystalStructure of the film
-           damping: damping for the film
-           layers:  number of layers in the film
+           film1: first film of the superlattice 
+           film2: second film of the superlattice 
+           bilayers: number of times both films get repeted
         """
         
         self.film1 = film1
@@ -479,7 +510,7 @@ class SuperLattice(object):
            film1 -> ThinFilm
            film2 -> ThinFilm
         """
-        assert isinstance(self.bilayers, (float, int)) , 'bilayers needs to be a number'
+        assert isinstance(self.bilayers, (int)) , 'bilayers needs to be an int'
         assert isinstance(self.film1, ThinFilm) , 'film1 needs to be a ThinFilm'
         assert isinstance(self.film2, ThinFilm) , 'film2 needs to be a ThinFilm'
     
@@ -518,11 +549,95 @@ class SuperLattice(object):
     
     def get_c(self):
         """returns the average c lattice parameter"""
-        c=((self.film1.crystal.lattice_parameters[2] * self.film1._layers_ +
-            self.film2.crystal.lattice_parameters[2] * self.film2._layers_) / 
+        c=((self.film1.crystal.lattice_parameters[2] * (self.film1._layers_ + self.film1.delta) +
+            self.film2.crystal.lattice_parameters[2] * (self.film2._layers_ + self.film2.delta)) / 
             self.get_n() 
           )
         return c
     
     def get_Lambda(self):
         return self.get_c()*self.get_n()
+
+#######################
+# SuperLatticeComplex #
+#######################
+
+class SuperLatticeComplex(SuperLattice):
+    
+    precision = 1
+    
+    def __init__(self, crystal1, crystal2, layers1=1, layers2=1, bilayers=1, damping=5.98E+4):
+        """initializes the class data and checks data types
+          
+           crystal1: SimpleCrystalStructure of the first film
+           layers1:  number of layers in the first film
+           crystal2: SimpleCrystalStructure of the second film
+           layers2:  number of layers in the second film
+           bilayers: number of times both films get repeted
+           damping: damping for the film
+           
+        """
+        
+        self.crystal1 = crystal1
+        self.layers1 = layers1
+        self.crystal2 = crystal2
+        self.layers2 = layers2
+        self.bilayers = bilayers
+        self.damping = damping
+        self._SuperLatticeComplex__type_check__()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+           crystal1 -> SimpleCrystalstructure
+           layers1 -> float
+           crystal2 -> SimpleCrystalstructure
+           layers2 -> float
+           damping -> float
+        """
+        assert isinstance(self.crystal1, SimpleCrystalStructure) , 'crystal1 needs to be a SimpleCrystalstructure'
+        assert isinstance(self.layers1, (float, int)) , 'bilayers needs to be a number'
+        assert isinstance(self.crystal2, SimpleCrystalStructure) , 'crystal2 needs to be a SimpleCrystalstructure'
+        assert isinstance(self.layers2, (float, int)) , 'bilayers needs to be a number'
+        assert isinstance(self.damping, float) , 'damping needs to be a float'
+        
+    _SuperLatticeComplex__type_check__ = __type_check__ #private copy of the function to avoid overload
+       
+    def get_phase_shift(self,  q, wavelength):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           wavelength: wavelength 
+        """
+        return ((self.film1.get_phase_shift(q, wavelength) * 
+                self.film2.get_phase_shift(q, wavelength)) ** self.bilayers
+               )
+    
+    def get_reflection(self, q, wavelength):
+        """returns the complex reflection value of the Superlattice.
+             
+           q: wave vector
+           wavelength: wavelength
+        """
+        r1 = self.film1.get_reflection(q, wavelength)
+        r2 = self.film2.get_reflection(q, wavelength)
+        p1 = self.film1.get_phase_shift(q, wavelength)
+        p2 = self.film2.get_phase_shift(q, wavelength)
+        r = 0.0 + 0.0j
+        for i in range(self.bilayers):
+            r += ((r1 * p2 + r2) * ((p1 * p2) ** i))
+        return r
+    
+
+    def get_n(self):
+        """returns the number of layers per bilayer"""
+        return self.layers1 + self.layers2
+        
+    def get_c(self):
+        """returns the average c lattice parameter"""
+        c=((self.crystal1.lattice_parameters[2] * self.layers1 +
+            self.crystal2.lattice_parameters[2] * self.layers2) / 
+            self.get_n() 
+          )
+        return c 
+
+    
