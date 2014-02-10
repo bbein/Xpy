@@ -8,9 +8,9 @@ for i in range(len(words)):
     if ( i == len(words)-3): break
     scriptpath += words[i]+"/"
 
-####################
+##############
 # FormFactor #
-####################
+##############
 
 class FormFactor(object): 
     
@@ -170,14 +170,16 @@ class Atom(object):
 
 class SimpleCrystalStructure(object):
     
-    def __init__(self, lattice_parameters = None, atoms = None, q = None, path = None ):
+    def __init__(self, lattice_parameters = None, atoms = None, damping=5.98E+4, q = None, path = None ):
         """initializes the class data and checks data types
           
             lattice_parameters: 3 element list default: [0.0 ...]  
             atoms: list of Atom instances default:[]
+            damping: damping coefficient of the structure
             q: scattering vector default: [0.0,0.0,0.0]
             path: path to a file with structure information default: None
         """
+        self.damping = damping
         if (atoms):
             self.atoms = atoms
         else:
@@ -205,6 +207,7 @@ class SimpleCrystalStructure(object):
                 " b="+ str(self.lattice_parameters[1]) +
                 " c="+ str(self.lattice_parameters[2]) + "\n"
                 )
+        stri += "damping: " + self.damping
         for atom in self.atoms:
             stri += atom.__str__() + "\n"
         return stri
@@ -212,6 +215,7 @@ class SimpleCrystalStructure(object):
     def __type_check__(self):
         """checks the class data to have the right types
         
+            damping -> float
             _wavelength_ -> float
             lattice_parameters -> list
             lattice_parameters[i] -> float
@@ -221,6 +225,7 @@ class SimpleCrystalStructure(object):
             _q_[i[ -> float
             _formfactor_ -> complex
         """
+        assert isinstance(self.damping, float) , 'damping needs to be a float'
         assert (isinstance(self.lattice_parameters, list) or (len(self.lattice_parameters) != 3)) , 'lattice_parameters needs to be a list with 3 elements' 
         for i in range(len(self.lattice_parameters)):
             assert (isinstance(self.lattice_parameters[i], float)) , 'lattice_parameters[' + str(i) + '] needs to be a number'
@@ -273,17 +278,20 @@ class SimpleCrystalStructure(object):
         while (line):
             words = line.split()
             if words:
-                if words[0]   == "a": self.lattice_parameters[0] = float(words[1])
+                if words[0]   == "element": self._add_atom_(f, words[1])
+                elif words[0] == "a": self.lattice_parameters[0] = float(words[1])
                 elif words[0] == "b": self.lattice_parameters[1] = float(words[1])
                 elif words[0] == "c": self.lattice_parameters[2] = float(words[1])
-                elif words[0] == "element": self._add_atom_(f, words[1])
+                elif words[0] == "damping": self.damping = float(words[1])
+                
             line = f.readline()
         f.close()
         
-    def get_structure_factor(self, q):
+    def get_structure_factor(self, q, sinomega):
         """calculates the structure factor for the structure 
         
             q: scattering vector
+            sinomega: sin(angle between incident beam and sample surface
         """
         if (self.atoms == []):
             return 0.0
@@ -296,8 +304,14 @@ class SimpleCrystalStructure(object):
                 for i in range(len(q)):
                     multi += atom.pos[i]*q[i] 
                 self._formfactor_ +=(atom.form.get_value(mq) *
-                                   mc.exp(1.0j * multi)
-                                   )
+                                     mc.exp(-1.0j * multi - 
+                                            (self.damping * sinomega *
+                                             (self.lattice_parameters[2] - 
+                                              atom.pos[2]
+                                             ) 
+                                            ) 
+                                           )     
+                                    )
             self._q_ = q[:]
         return self._formfactor_   
 
@@ -322,6 +336,7 @@ class Film (object):
         self._icq_ = self._ibq_ = self._iaq_ = 0.0;
         self._amplitude_ = 0.0;
         self._q_ = [0.0, 0.0, 0.0]
+        self._sinomega_ = 0.0
         self._Film__type_check__()
 
     def __str__(self):
@@ -344,15 +359,13 @@ class Film (object):
 
     def _set_icq_(self):
         """recalculates the values for i*(latticeparameters*q)"""
-        factor = (4 * m.pi / self._wavelength_ * 
-                  self.damping / m.sqrt(sum([x**2 for x in self._q_]))
-                  )
+        factor = self._sinomega_ * self.crystal.damping                   
         a = self.crystal.lattice_parameters[0]
         b = self.crystal.lattice_parameters[1]
         c = self.crystal.lattice_parameters[2]
-        self._iaq_ = (-1J * (a * self._q_[0])) + (-a * factor)   
-        self._ibq_ = (-1J * (b * self._q_[1])) + (-b * factor) 
-        self._icq_ = (-1J * (c * self._q_[2])) + (-c * factor)
+        self._iaq_ = -1J * a * self._q_[0]  
+        self._ibq_ = -1J * b * self._q_[1] 
+        self._icq_ = -1J * c * self._q_[2] - c * factor
     
     def _calc_amplitude_(self):
         """calculates the scattering amplitude"""
@@ -367,33 +380,39 @@ class Film (object):
         """calculates the complex reflection value of the Film."""
         self._set_icq_();
         self._calc_amplitude_();
-        r = (self._amplitude_ * self.crystal.get_structure_factor(self._q_) / 
+        r = (self._amplitude_ * self.crystal.get_structure_factor(self._q_ , self._sinomega_) / 
              (#(1 - mc.exp(self._iaq_)) * (1 - mc.exp(self._ibq_)) * 
              (1 - mc.exp(self._icq_))
             ))
         self._reflection_ = 2 * r / (1 + m.sqrt(1 + 4 * abs(r**2)))
     
-    def _check_q_l_(self, q, wavelength):
+    def _check_q_l_(self, q, wavelength, sinomega):
         """checks if q or lambda are changed.
         
            q: scattering vector
-           wavelength: wavelength 
+           wavelength: wavelength
+           sinomega: sin(angle between incident beam and sample surface 
         """
         assert isinstance(q,self._q_.__class__), 'q needs to be ' + str(self._q_.__class__)
         assert isinstance(wavelength,self._wavelength_.__class__), 'wavelength needs to be ' + str(self._wavelength_.__class__)
-        if ( (self._q_ != q) or (self._wavelength_ != wavelength) ):
-            self._q_ = q[:];
-            self._wavelength_ = wavelength;
+        assert isinstance(sinomega,self._sinomega_.__class__), 'sinomega needs to be ' + str(self._sinomega_.__class__)
+        if ( (self._q_ != q) or 
+             (self._wavelength_ != wavelength) or
+             (self._sinomega_ != sinomega) ):
+            self._q_ = q[:]
+            self._wavelength_ = wavelength
+            self._sinomega_ = sinomega
             return True;
         return False;
     
-    def get_reflection(self, q, wavelength):
+    def get_reflection(self, q, wavelength, sinomega):
         """returns the complex reflection value of the Film.
              
            q: wave vector
            wavelength: wavelength
+           sinomega: sin(angle between incident beam and sample surface
         """
-        if (self._check_q_l_(q, wavelength)):
+        if (self._check_q_l_(q, wavelength, sinomega)):
             self._calc_reflection_()
         return self._reflection_
 
@@ -466,7 +485,7 @@ class ThinFilm(Film):
         self._set_icq_()
         self._calc_amplitude_()
         self._reflection_ = (self._amplitude_ * 
-                             self.crystal.get_structure_factor(self._q_) * 
+                             self.crystal.get_structure_factor(self._q_, self._sinomega_) * 
                              (1-mc.exp(self._icnq_)) / (#(1-mc.exp(self._iaq_))* 
                                                        #(1-mc.exp(self._ibq_))* 
                                                        (1-mc.exp(self._icq_))
@@ -474,13 +493,13 @@ class ThinFilm(Film):
                             )
         self._phaseshift_ = mc.exp(self._icnq_ + self.delta * self._icq_)      
 
-    def get_phase_shift(self,  q, wavelength):
+    def get_phase_shift(self,  q, wavelength, sinomega):
         """returns the phase of the film.
 
            q: scattering vector
            wavelength: wavelength 
         """
-        if (self._check_q_l_, q, wavelength):
+        if (self._check_q_l_, q, wavelength, sinomega):
             self._calc_reflection_()
         return self._phaseshift_
 
@@ -516,26 +535,26 @@ class SuperLattice(object):
     
     _SuperLattice__type_check__ = __type_check__ #private copy of the function to avoid overload
        
-    def get_phase_shift(self,  q, wavelength):
+    def get_phase_shift(self,  q, wavelength, sinomega):
         """returns the phase of the Superlattice.
 
            q: scattering vector
            wavelength: wavelength 
         """
-        return ((self.film1.get_phase_shift(q, wavelength) * 
-                self.film2.get_phase_shift(q, wavelength)) ** self.bilayers
+        return ((self.film1.get_phase_shift(q, wavelength, sinomega) * 
+                self.film2.get_phase_shift(q, wavelength, sinomega)) ** self.bilayers
                )
     
-    def get_reflection(self, q, wavelength):
+    def get_reflection(self, q, wavelength, sinomega):
         """returns the complex reflection value of the Superlattice.
              
            q: wave vector
            wavelength: wavelength
         """
-        r1 = self.film1.get_reflection(q, wavelength)
-        r2 = self.film2.get_reflection(q, wavelength)
-        p1 = self.film1.get_phase_shift(q, wavelength)
-        p2 = self.film2.get_phase_shift(q, wavelength)
+        r1 = self.film1.get_reflection(q, wavelength, sinomega)
+        r2 = self.film2.get_reflection(q, wavelength, sinomega)
+        p1 = self.film1.get_phase_shift(q, wavelength, sinomega)
+        p2 = self.film2.get_phase_shift(q, wavelength, sinomega)
         r = 0.0 + 0.0j
         for i in range(self.bilayers):
             r += ((r1 * p2 + r2) * ((p1 * p2) ** i))
@@ -549,14 +568,12 @@ class SuperLattice(object):
     
     def get_c(self):
         """returns the average c lattice parameter"""
-        c=((self.film1.crystal.lattice_parameters[2] * (self.film1._layers_ + self.film1.delta) +
-            self.film2.crystal.lattice_parameters[2] * (self.film2._layers_ + self.film2.delta)) / 
-            self.get_n() 
-          )
-        return c
+        return self.get_Lambda() / self.get_n()
     
     def get_Lambda(self):
-        return self.get_c()*self.get_n()
+        """returns the Total thicknes of the superlatice"""
+        return (self.film1.crystal.lattice_parameters[2] * (self.film1._layers_ + self.film1.delta) +
+            self.film2.crystal.lattice_parameters[2] * (self.film2._layers_ + self.film2.delta))
 
 #######################
 # SuperLatticeComplex #
@@ -601,31 +618,6 @@ class SuperLatticeComplex(SuperLattice):
         assert isinstance(self.damping, float) , 'damping needs to be a float'
         
     _SuperLatticeComplex__type_check__ = __type_check__ #private copy of the function to avoid overload
-       
-    def get_phase_shift(self,  q, wavelength):
-        """returns the phase of the Superlattice.
-
-           q: scattering vector
-           wavelength: wavelength 
-        """
-        return ((self.film1.get_phase_shift(q, wavelength) * 
-                self.film2.get_phase_shift(q, wavelength)) ** self.bilayers
-               )
-    
-    def get_reflection(self, q, wavelength):
-        """returns the complex reflection value of the Superlattice.
-             
-           q: wave vector
-           wavelength: wavelength
-        """
-        r1 = self.film1.get_reflection(q, wavelength)
-        r2 = self.film2.get_reflection(q, wavelength)
-        p1 = self.film1.get_phase_shift(q, wavelength)
-        p2 = self.film2.get_phase_shift(q, wavelength)
-        r = 0.0 + 0.0j
-        for i in range(self.bilayers):
-            r += ((r1 * p2 + r2) * ((p1 * p2) ** i))
-        return r
     
 
     def get_n(self):

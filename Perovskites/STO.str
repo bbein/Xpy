@@ -4,7 +4,7 @@ c 3.905E-10
 element Sr
 x 0
 y 0
-z 0
+z 1
 element Ti
 x 0.5
 y 0.5
@@ -12,7 +12,7 @@ z 0.5
 element O
 x 0.5
 y 0.5
-z 0.0
+z 1.0
 element O
 x 0.5
 y 0
