@@ -1,6 +1,7 @@
 import math as m
 import cmath as mc
-#import numpy as np
+import fractions
+import random
 
 words = __file__.split("/")
 scriptpath = ""
@@ -203,7 +204,7 @@ class CrystalStructure(object):
                 " b="+ str(self.lattice_parameters[1]) +
                 " c="+ str(self.lattice_parameters[2]) + "\n"
                 )
-        stri += "damping: " + self.damping
+        stri += "damping: " + str(self.damping) + '\n'
         for atom in self.atoms:
             stri += atom.__str__() + "\n"
         return stri
@@ -277,6 +278,19 @@ class CrystalStructure(object):
                 elif words[0] == "damping": self.damping = float(words[1])
                 
             line = f.readline()
+        f.close()
+    
+    def save_file(self, path):
+        """saves the structure to the file path"""
+        f = open(path, 'w')
+        f.write('a ' + str(self.lattice_parameters[0]) + '\n')
+        f.write('b ' + str(self.lattice_parameters[1]) + '\n')
+        f.write('c ' + str(self.lattice_parameters[2]) + '\n')
+        for atom in self.atoms:
+            f.write('element ' + str(atom.form.atom) + '\n')
+            f.write('x ' + str(atom.pos[0]/self.lattice_parameters[0]) + '\n')
+            f.write('y ' + str(atom.pos[1]/self.lattice_parameters[1]) + '\n')
+            f.write('z ' + str(atom.pos[2]/self.lattice_parameters[2]) + '\n')
         f.close()
         
     def _calc_structure_factor_(self, q, sinomega):
@@ -676,6 +690,82 @@ class SuperLattice(object):
         """returns the Total thicknes of the superlatice"""
         return (self.film1.get_thickness() + self.film2.get_thickness())
 
+##########
+# Sample #
+##########
+
+class Sample(object):
+        
+    def __init__(self, substrate = None, electrode = None, film = None, layers = None):
+        """initializes the class data and checks data types
+          
+           Substrate: substrate of the Sample 
+           Electrode: Electrode of the Sample
+           Film: Film of the Sample
+           Layers: any number of Layers to add to the sample
+        """
+        
+        self._Layers_ = []
+        if (substrate):
+            self._Layers_.append(substrate)
+        if (electrode):
+            self._Layers_.append(electrode)
+        if (film):
+            self._Layers_.append(film)
+        if (layers):
+            for layer in layers:
+                self._Layers_.append(layer)
+        self._Sample__type_check__()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           _Layers_ -> list 
+           _Layers_[i] -> Layer
+        """
+        assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
+        for i in range(len(self._Layers_)):
+            assert (isinstance(self._Layers_[i], (Layer, SuperLattice))) , '_Layers_[' + str(i) + '] needs to be a Layer'
+    
+    _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
+       
+    def get_phase_shift(self,  q, sinomega):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        phase = 0.0 + 0.0j
+        for layer in self._Layers_:
+            phase += layer.get_phase_shift(q, sinomega)
+        return phase
+    
+    def get_reflection(self, q, sinomega):
+        """returns the complex reflection value of the Superlattice.
+             
+           q: wave vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        r = 0.0 + 0.0j
+        for i in range(len(self._Layers_)):
+            temp = self._Layers_[i].get_reflection(q, sinomega)
+            for j in range(i+1, len(self._Layers_)):
+                temp *= self._Layers_[j].get_phase_shift(q, sinomega)
+            r += temp 
+        return r
+    
+    def get_thickness(self):
+        """returns the thickness of the sample."""
+        thickness = 0.0 + 0.0j
+        for layer in self._Layers_:
+            thickness += layer.get_thickness()
+        return thickness
+    
+    def add_Layer(self, layer):
+        """adds the layer to the top of the sample."""
+        assert (isinstance(layer, (Layer, SuperLattice))) , 'layer needs to be a Layer'
+        self._Layers_.append(layer)
+
 #######################
 # SuperLatticeComplex #
 #######################
@@ -733,4 +823,243 @@ class SuperLatticeComplex(SuperLattice):
           )
         return c 
 
+
+##################
+# Help Functions #
+##################
+
+def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 0, k = 0, sinomegain = 0, direct = 2.0E8, background = 1, wavelength = 1.5409E-10):
+
+    q = [0.0,0.0,0.0]
+    steps_l = (l_max-l_min)/l_step
+    q[0] = h*2*m.pi/base_struc.lattice_parameters[0]
+    q[1] = k*2*m.pi/base_struc.lattice_parameters[0]
+    scan = []
+    for i in range(int(steps_l)):
+        l=l_min+i*l_step
+        q[2] = l*2*m.pi/base_struc.lattice_parameters[2]
+        absq = sum([x**2 for x in q])
+        if (sinomegain == 0):
+            sinomega = 4.0 * m.pi / absq / wavelength
+        else:
+            sinomega = sinomegain
+        lin = abs(sample.get_reflection(q, sinomega))
+        lin *= lin
+        lin *= direct
+        lin += background
+        scan.append([l, lin])
     
+    return scan
+
+def lcm(a,b): 
+    return abs(a * b) / fractions.gcd(a,b) if a and b else 0 
+
+def get_multi(x):
+    S = str(x).split(".")
+    if (len(S) == 1):
+        return 1
+    L = 10**len(S[1])
+    div = alldividers(L)
+    for i in div:
+        if(i*x == float(int(i*x))):
+            return i
+                      
+def alldividers(number):
+    multi = 10.0
+    try: #only changes the multiplicator if number is a decimal number
+        temp = str(number).split(".")
+        multi = 10.0**len(temp[1])
+    except:
+        pass        
+    result = []
+    for i in range (1, number + 1):
+        if number * multi / i % multi == 0:
+            result.append(i)
+    return result
+
+def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zoffset1 = 0.0, zoffset2 = 0.0):
+    random.seed()
+    L1 = get_multi(l1)
+    L2 = get_multi(l2)
+    L = lcm(L1,L2)
+    layers = bl*(l1+l2)
+    if (float(int(layers)) == layers):
+        layers = int(layers)
+    else:
+        layers = int(layers)+1
+    (a, b, c) = (a_in*L*10**(-10), a_in*10**(-10) ,c_in*layers*10**(-10) )
+    crystal = CrystalStructureCheck()
+    crystal.lattice_parameters[0] = a
+    crystal.lattice_parameters[1] = b
+    crystal.lattice_parameters[2] = c
+    
+    atom_kind = 1
+    l = l1
+    offset = 0
+    zoffset = zoffset1
+    for i in range(layers):
+        for j in range(L):
+            #check that the right atom is printed
+            if (i*L+j - offset >= l*L):
+                if (atom_kind == 1):
+                    l = l2
+                    atom_kind = 2
+                    zoffset += zoffset2
+                else:
+                    l = l1
+                    atom_kind = 1
+                offset = i*L+j
+                zoffset += zoffset1
+            #create atoms
+            #corner atom
+            if (atom_kind == 1):
+                atomtype = a11
+            else:
+                atomtype = a21
+            form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
+            pos = [0.0,0.0,0.0]
+            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L * a
+            pos[1] =(    0.0 + random.randrange(-1,1) * size) * b
+            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers * c
+            atom = Atom(form, pos)
+            crystal.add_atom(atom)
+            #center atom
+            if (atom_kind == 1):
+                atomtype = a12
+            else:
+                atomtype = a22
+            form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
+            pos = [0.0,0.0,0.0]
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
+            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            atom = Atom(form, pos)
+            crystal.add_atom(atom)
+            #oxygen 1
+            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            pos = [0.0,0.0,0.0]
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
+            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
+            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers * c
+            atom = Atom(form, pos)
+            crystal.add_atom(atom)
+            #oxygen 2
+            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            pos = [0.0,0.0,0.0]
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
+            pos[1] =(    0.0 + random.randrange(-1,1) * size) * b
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            atom = Atom(form, pos)
+            crystal.add_atom(atom)
+            #oxygen 3
+            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            pos = [0.0,0.0,0.0]
+            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L * a
+            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            atom = Atom(form, pos)
+            crystal.add_atom(atom)
+    return crystal
+
+def showup(l1, l2):
+    L1 = get_multi(l1)
+    L2 = get_multi(l2)
+    L = lcm(L1,L2)
+    bl = get_multi((l1+l2))
+    layers = float(bl)*(l1+l2)
+    
+    if (float(int(layers)) == layers):
+        layers = int(layers)  
+    
+    atom = 1
+    l = l1
+    offset = 0
+    result = ''
+    for i in range(layers):
+        for j in range(L):
+            #check that the right atom is printed
+            if (i*L+j - offset >= l*L):
+                if (atom == 1):
+                    l = l2
+                    atom = 2
+                else:
+                    l = l1
+                    atom = 1
+                offset = i*L+j
+            if (atom == 1):
+                result += 'B'
+            else:
+                result += 'S'
+        result += '\n'
+    each = result.split('\n')
+    temp = []
+    for i in range(len(each)-1, -1 ,-1):
+        temp.append(each[i])
+    #for line in temp:
+        #print line
+        
+#######################
+# Load Data Functions #
+#######################
+
+def load_sim(path):
+    data = []
+    f = open(path, 'r')
+    line=f.readline()
+    line=f.readline()
+    while (line):
+        words = line.split(' ')
+        if words:
+            if (len(words) > 1):
+                data.append([words[2],words[3]])
+        line=f.readline()
+    f.close()
+    return data
+
+def load_data(path):
+    data = []
+    f = open(path, 'r')
+    line=f.readline()
+    line=f.readline()
+    while (line):
+        words = line.split(' ')
+        if words:
+            if (len(words) > 1):
+                data.append([words[0],words[1]])
+        line=f.readline()
+    f.close()
+    return data
+
+def load_scan(path, scan_number):
+    data = []
+    f = open(path, 'r')
+    line = f.readline()
+    line = f.readline()
+    while (line):
+        words = line.split(',')
+        if words:
+            if (len(words) > 1):
+                if (words[0] == str(scan_number)):
+                    data.append([float(words[1]),float(words[3])])
+        line=f.readline()
+    f.close()
+    return data
+
+def import_scan(path):
+    data = []
+    data.append([])
+    f = open(path, 'r')
+    line = f.readline()
+    line = f.readline()
+    while (line):
+        words = line.split(',')
+        if words:
+            if (len(words) > 1):
+                try:
+                    data[int(words[0])].append([float(words[1]),float(words[3])])  
+                except:
+                    data.append([])
+                    data[int(words[0])].append([float(words[1]),float(words[3])])
+        line=f.readline()
+    f.close()
+    return data
