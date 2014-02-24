@@ -3,29 +3,22 @@ import xpy
 
 l_min = 0.8
 l_max = 1.05
-l_step = 0.001
+l_step = 0.0002 #5000 points per order of l
 
-wavelength = 1.5409E-10
-direct = 1.0E16
+wavelength = 10**-10
+direct = 2.0E8
 background = 1
 
-STO =  xpy.SimpleCrystalStructure(path = xpy.scriptpath+"Perovskites/STO.str")
-PTO =  xpy.SimpleCrystalStructure(path = xpy.scriptpath+"Perovskites/PTOs.str")
-substrate =  xpy.Film(STO)
-film = xpy.ThinFilm(PTO)
+STO = xpy.CrystalStructureCheck(path = xpy.scriptpath+"Perovskites/STOh.str")
+substrate = xpy.ThickFilmCheck(STO)
 
-q = [0.0,0.0,0.0]
-steps_l = (l_max-l_min)/l_step
-#Output
-data = []
-for i in range(int(steps_l)):
-    l=l_min+i*l_step
-    q[2] = l*2*m.pi/STO.lattice_parameters[2]
-    #lin = abs(film.get_reflection(q, wavelength) + substrate.get_reflection(q, wavelength) * film.get_phase_shift(q, wavelength))
-    lin = abs(film.get_reflection(q, wavelength))
-    #lin = abs(substrate.get_reflection(q, wavelength))
-    lin *= lin
-    lin *= direct
-    lin += background;
-    data.append([l, lin])
-    print(l, lin, m.log10(lin))
+SRO = xpy.CrystalStructureCheck(path = xpy.scriptpath+"Perovskites/SROs.str")
+electrode = xpy.ThinFilmCheck(SRO,41)
+SRO.lattice_parameters[0] = SRO.lattice_parameters[1] = 3.925*10**-10
+SRO.lattice_parameters[2] = 3.999*10**-10
+electrode.delta = 0.0
+
+substrate = xpy.ThickFilmCheck(STO)
+sample = xpy.Sample(substrate)
+
+sub001 = xpy.l_scan(sample, STO, l_min = l_min, l_max = l_max, l_step = l_step, direct = direct, background = background, wavelength = wavelength)
