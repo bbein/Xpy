@@ -1045,7 +1045,7 @@ def load_scan(path, scan_number):
     f.close()
     return data
 
-def import_scan(path):
+def import_scan(path, row1 = 1, row2 = 3):
     data = []
     data.append([])
     f = open(path, 'r')
@@ -1056,10 +1056,10 @@ def import_scan(path):
         if words:
             if (len(words) > 1):
                 try:
-                    data[int(words[0])].append([float(words[1]),float(words[3])])  
+                    data[int(words[0])].append([float(words[row1]),float(words[row2])])  
                 except:
                     data.append([])
-                    data[int(words[0])].append([float(words[1]),float(words[3])])
+                    data[int(words[0])].append([float(words[row1]),float(words[row2])])
         line=f.readline()
     f.close()
     return data
