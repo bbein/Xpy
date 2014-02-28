@@ -840,13 +840,13 @@ class SuperLatticeComplex(object):
                     j2 = j-1
                     if j2 < 0:
                         j2 = len(self.layers)-1
-                    key = '{}-{}_{}-{}'.format(j, round(1 - leftover, 5), j2, round(leftover,5))
+                    key = '{}-{}_{}-{}'.format(j, 1 - leftover, j2, leftover)
                     if key not in self._films_.keys():
-                        crystal = create_layer(self.crystals[j2], self.crystals[j], round(leftover,5))
+                        crystal = create_layer(self.crystals[j2], self.crystals[j], leftover)
                         self._films_[key] = LayerSave(crystal)
                     self._sample_.append(self._films_[key])
                 int_layer = int(layer-leftover)
-                leftover = layer%int_layer
+                leftover = round(layer%int_layer,9)
                 key = '{}-{}'.format(j, int_layer)
                 if key not in self._films_.keys():
                     self._films_[key] = ThinFilmSave(self.crystals[j], int_layer)
