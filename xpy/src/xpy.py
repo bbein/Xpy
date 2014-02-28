@@ -354,7 +354,7 @@ class Layer(object):
     def __init__(self, crystal):
         """initializes the class data and checks data types
           
-           crystal SimpleCrystalStructure of the film 
+           crystal CrystalStructure of the film 
         """
         self.crystal= crystal
         self._icq_ = self._ibq_ = self._iaq_ = 0.0
@@ -372,7 +372,7 @@ class Layer(object):
     def __type_check__(self):
         """checks the class data to have the right types
         
-           crystal -> SimpleCrystalstructure 
+           crystal -> Crystalstructure 
         """
         assert isinstance(self.crystal, CrystalStructure) , 'crystal needs to be a SimpleCrystalstructure'
         
@@ -406,7 +406,11 @@ class Layer(object):
         return r
     
     def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the layer"""
+        """returns the phase shift of the layer
+        
+            q: wave vector
+           sinomega: sin(angle between incident beam and sample surface
+        """
         return mc.exp( (1 + self.delta) * self._icq_)
         
     def get_reflection(self, q, sinomega):
@@ -488,6 +492,7 @@ class LayerSave(Layer):
         self._data_ = []
         self._reflection_ = []
         self._phase_shift_ = []
+        self._counter_ = 0
         
     def _check_q_s_(self, q, sinomega):
         """checks if q or sinomega are changed.
@@ -495,14 +500,22 @@ class LayerSave(Layer):
            q: scattering vector
            sinomega: sin(angle between incident beam and sample surface""" 
         values = [q[:], sinomega]
+        self._counter_ += 1
         try:
-            return self._data_.index(values)
+            if (values == self._data_[self._counter_]): #exception if counter bigger than list
+                pass
+            elif (values == self._data_[self._counter_-1]):
+                self._counter_ -= 1
+            else:                
+                self._counter_ = self._data_.index(values) #exception if values not in data
         except:
             self._data_.append([q[:], sinomega])
             self._reflection_.append(self._calc_reflection_(q, sinomega))
             self._phase_shift_.append(self._calc_phase_shift_(q, sinomega))
-            return  (len(self._data_) - 1)
-    
+            self._counter_ = (len(self._data_) - 2) #makes sure that every data set gets checked
+            return self._counter_ + 1
+        return self._counter_
+        
     def get_reflection(self, q, sinomega):
         """returns the complex reflection value of the Film.
              
@@ -647,8 +660,8 @@ class SuperLattice(object):
     def get_phase_shift(self,  q, sinomega):
         """returns the phase of the Superlattice.
 
-           q: scattering vector
-           wavelength: wavelength 
+           q: wave vector
+           sinomega: sin(angle between incident beam and sample surface
         """
         return ((self.film1.get_phase_shift(q, sinomega) * 
                 self.film2.get_phase_shift(q, sinomega)) ** self.bilayers
@@ -658,7 +671,7 @@ class SuperLattice(object):
         """returns the complex reflection value of the Superlattice.
              
            q: wave vector
-           wavelength: wavelength
+           sinomega: sin(angle between incident beam and sample surface
         """
         r1 = self.film1.get_reflection(q, sinomega)
         r2 = self.film2.get_reflection(q, sinomega)
@@ -687,8 +700,12 @@ class SuperLattice(object):
         return self.get_Lambda() / self.get_n()
     
     def get_Lambda(self):
-        """returns the Total thicknes of the superlatice"""
+        """returns the Bilayer thickness of the superlatice"""
         return (self.film1.get_thickness() + self.film2.get_thickness())
+    
+    def get_thickness(self):
+        """returns the total thickness of the superlatice"""
+        return self.get_Lambda()*self.bilayers
 
 ##########
 # Sample #
@@ -725,7 +742,7 @@ class Sample(object):
         """
         assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
         for i in range(len(self._Layers_)):
-            assert (isinstance(self._Layers_[i], (Layer, SuperLattice))) , '_Layers_[' + str(i) + '] needs to be a Layer'
+            assert (isinstance(self._Layers_[i], (Layer, SuperLattice, Sample))) , '_Layers_[' + str(i) + '] needs to be a Layer'
     
     _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
        
@@ -770,59 +787,91 @@ class Sample(object):
 # SuperLatticeComplex #
 #######################
 
-class SuperLatticeComplex(SuperLattice):
+class SuperLatticeComplex(object):
     
-    precision = 1
-    
-    def __init__(self, crystal1, crystal2, layers1=1, layers2=1, bilayers=1, damping=5.98E+4):
+    def __init__(self, crystals = None, layers = None, repetitions=1):
         """initializes the class data and checks data types
           
-           crystal1: SimpleCrystalStructure of the first film
-           layers1:  number of layers in the first film
-           crystal2: SimpleCrystalStructure of the second film
-           layers2:  number of layers in the second film
-           bilayers: number of times both films get repeted
-           damping: damping for the film
-           
+           crystals: Crystal Structures of the superlattice 
+           layers:  number of layers of each CrystalStructure
+           repetions: number of repetions          
         """
+        self.crystals = crystals
+        if not self.crystals:
+            self.crystals = []
+        self.layers = layers
+        if not self.layers:
+            self.layers = []
+        self.repetitions = repetitions
+        self._films_ = {}
+        self._sample_ = []
         
-        self.crystal1 = crystal1
-        self.layers1 = layers1
-        self.crystal2 = crystal2
-        self.layers2 = layers2
-        self.bilayers = bilayers
-        self.damping = damping
         self._SuperLatticeComplex__type_check__()
+        
+        self._create_structures_()
         
     def __type_check__(self):
         """checks the class data to have the right types
-           crystal1 -> SimpleCrystalstructure
-           layers1 -> float
-           crystal2 -> SimpleCrystalstructure
-           layers2 -> float
-           damping -> float
+           crystals -> list
+           crystals[] -> CrystalStructure
+           layers -> list
+           layers[] -> float, int
+           repetitions -> float, int
+
         """
-        assert isinstance(self.crystal1, CrystalStructure) , 'crystal1 needs to be a SimpleCrystalstructure'
-        assert isinstance(self.layers1, (float, int)) , 'bilayers needs to be a number'
-        assert isinstance(self.crystal2, CrystalStructure) , 'crystal2 needs to be a SimpleCrystalstructure'
-        assert isinstance(self.layers2, (float, int)) , 'bilayers needs to be a number'
-        assert isinstance(self.damping, float) , 'damping needs to be a float'
+        assert isinstance(self.repetitions, (float, int)) , 'repetitions needs to be a number'
+        assert (isinstance(self.crystals, list)) , 'atoms needs to be a list ' 
+        for i in range(len(self.crystals)):
+            assert (isinstance(self.crystals[i], CrystalStructure)) , 'crystals[' + str(i) + '] needs to be a CrystalStructure'
+        assert (isinstance(self.layers, list)) , 'layers needs to be a list ' 
+        for i in range(len(self.layers)):
+            assert (isinstance(self.layers[i], (float, int))) , 'layers[' + str(i) + '] needs to be a number'
         
     _SuperLatticeComplex__type_check__ = __type_check__ #private copy of the function to avoid overload
     
+    def _create_structures_(self):
+        """creates the crystal structures needed"""
+        leftover = 0.0
+        for i in range(self.repetitions):
+            for j in range(len(self.layers)):
+                layer = self.layers[j]
+                if leftover != 0.0:
+                    layer -= 1-leftover
+                    j2 = j-1
+                    if j2 < 0:
+                        j2 = len(self.layers)-1
+                    key = '{}-{}_{}-{}'.format(j, round(1 - leftover, 5), j2, round(leftover,5))
+                    if key not in self._films_.keys():
+                        crystal = create_layer(self.crystals[j2], self.crystals[j], round(leftover,5))
+                        self._films_[key] = LayerSave(crystal)
+                    self._sample_.append(self._films_[key])
+                int_layer = int(layer-leftover)
+                leftover = layer%int_layer
+                key = '{}-{}'.format(j, int_layer)
+                if key not in self._films_.keys():
+                    self._films_[key] = ThinFilmSave(self.crystals[j], int_layer)
+                self._sample_.append(self._films_[key])
 
     def get_n(self):
-        """returns the number of layers per bilayer"""
-        return self.layers1 + self.layers2
+        """returns the number of layers per repetitions"""
+        return sum(self.layers)
         
     def get_c(self):
         """returns the average c lattice parameter"""
-        c=((self.crystal1.lattice_parameters[2] * self.layers1 +
-            self.crystal2.lattice_parameters[2] * self.layers2) / 
-            self.get_n() 
-          )
-        return c 
-
+        return self.get_Lambda() / self.get_n() 
+    
+    def get_Lambda(self):
+        """returns the thicknes of one repetion"""
+        l=0.0
+        n = 0
+        for crystal in self.crystals:
+            l += crystal.lattice_parameters[2] * self.layers[n]
+            n += 1
+        return l
+    
+    def get_thickness(self):
+        """returns the total thickness of the superlatice"""
+        return self.get_Lambda()*self.bilayers
 
 ##################
 # Help Functions #
@@ -833,7 +882,7 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
     q = [0.0,0.0,0.0]
     steps_l = (l_max-l_min)/l_step
     q[0] = h*2*m.pi/base_struc.lattice_parameters[0]
-    q[1] = k*2*m.pi/base_struc.lattice_parameters[0]
+    q[1] = k*2*m.pi/base_struc.lattice_parameters[1]
     scan = []
     for i in range(int(steps_l)):
         l=l_min+i*l_step
@@ -847,7 +896,7 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
         lin *= lin
         lin *= direct
         lin += background
-        scan.append([l, lin])
+        scan.append([h, k, l, lin])
     
     return scan
 
@@ -876,6 +925,23 @@ def alldividers(number):
         if number * multi / i % multi == 0:
             result.append(i)
     return result
+
+def create_layer(struc1, struc2, amount1):
+    L = get_multi(amount1) 
+    a = max(struc1.lattice_parameters[0],struc2.lattice_parameters[0])
+    b = max(struc1.lattice_parameters[1],struc2.lattice_parameters[1])
+    c = max(struc1.lattice_parameters[2],struc2.lattice_parameters[2])
+    crystal = CrystalStructure([a*L,b,c])
+    for j in range(L):
+        if (j < amount1*L):
+            struc = struc1                
+        else:
+            struc = struc2 
+        for atom in struc.atoms:
+            addatom = Atom(atom.form, atom.pos[:] )
+            addatom.pos[0] += j*a
+            crystal.add_atom(addatom)
+    return crystal
 
 def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zoffset1 = 0.0, zoffset2 = 0.0):
     random.seed()
