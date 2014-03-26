@@ -832,25 +832,36 @@ class SuperLatticeComplex(object):
     def _create_structures_(self):
         """creates the crystal structures needed"""
         leftover = 0.0
-        for i in range(self.repetitions):
-            for j in range(len(self.layers)):
-                layer = self.layers[j]
+        layers = sum(self.layers)*self.repetitions
+        i = 0
+        while(layers > 0):
+            layer = self.layers[i]
+            while(layer >= 1):
                 if leftover != 0.0:
-                    layer -= 1-leftover
-                    j2 = j-1
+                    j2 = i-1
                     if j2 < 0:
                         j2 = len(self.layers)-1
-                    key = '{}-{}_{}-{}'.format(j, 1 - leftover, j2, leftover)
+                    key = '{}-{}_{}-{}'.format(i, round(1 - leftover,8), j2, leftover)
                     if key not in self._films_.keys():
-                        crystal = create_layer(self.crystals[j2], self.crystals[j], leftover)
+                        crystal = create_layer(self.crystals[j2], self.crystals[i], leftover)
                         self._films_[key] = LayerSave(crystal)
                     self._sample_.append(self._films_[key])
-                int_layer = int(layer-leftover)
-                leftover = round(layer%int_layer,9)
-                key = '{}-{}'.format(j, int_layer)
-                if key not in self._films_.keys():
-                    self._films_[key] = ThinFilmSave(self.crystals[j], int_layer)
-                self._sample_.append(self._films_[key])
+                    layer -= 1-leftover
+                    leftover = 0.0
+                else:
+                    key = '{}-{}'.format(i, 1)
+                    if key not in self._films_.keys():
+                        self._films_[key] = LayerSave(self.crystals[i])
+                    self._sample_.append(self._films_[key])
+                    layer -= 1
+                
+                layers -= 1
+                if (layers < 0):
+                    break
+            leftover = round(layer, 8)
+            i += 1
+            if i > len(self.layers)-1:
+                i = 0
 
     def get_n(self):
         """returns the number of layers per repetitions"""
