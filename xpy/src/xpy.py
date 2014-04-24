@@ -48,7 +48,7 @@ class Atom(object):
             pos[i] -> float
             struc  -> StructureFactor
         """
-        assert isinstance(self.form, FormFactor) , 'struc needs to be a StructureFactor'
+        assert isinstance(self.form, FormFactor) , 'form needs to be a FormFactor'
         assert (isinstance(self.pos, list) or (len(self.pos) != 3)) , 'a needs to be a list with 3 elements'
         for i in range(len(self.pos)):
             assert (isinstance(self.pos[i], (float, int))) , 'pos' + str(i) + 'needs to be a number'
@@ -383,7 +383,7 @@ class Layer(object):
         a = self.crystal.lattice_parameters[0]
         b = self.crystal.lattice_parameters[1]
         c = self.crystal.lattice_parameters[2]
-        factor = sinomega * self.crystal.damping * c
+        factor = self.crystal.damping * c * sinomega
         self._iaq_ = -1J * a * q[0] - factor 
         self._ibq_ = -1J * b * q[1] - factor 
         self._icq_ = -1J * c * q[2] - factor
@@ -411,7 +411,7 @@ class Layer(object):
             q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return mc.exp( (1 + self.delta) * self._icq_)
+        return mc.exp( (1 + self.delta) * self._icq_.imag)
         
     def get_reflection(self, q, sinomega):
         """returns the complex reflection value of the Film.
@@ -742,7 +742,7 @@ class Sample(object):
         """
         assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
         for i in range(len(self._Layers_)):
-            assert (isinstance(self._Layers_[i], (Layer, SuperLattice, Sample))) , '_Layers_[' + str(i) + '] needs to be a Layer'
+            assert (isinstance(self._Layers_[i], (Layer, SuperLattice, SuperLatticeComplex, Sample))) , '_Layers_[' + str(i) + '] needs to be a Layer'
     
     _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
        
@@ -787,7 +787,7 @@ class Sample(object):
 # SuperLatticeComplex #
 #######################
 
-class SuperLatticeComplex(object):
+class SuperLatticeComplex(Sample):
     
     def __init__(self, crystals = None, layers = None, repetitions=1):
         """initializes the class data and checks data types
@@ -804,7 +804,7 @@ class SuperLatticeComplex(object):
             self.layers = []
         self.repetitions = repetitions
         self._films_ = {}
-        self._sample_ = []
+        self._Layers_ = []
         
         self._SuperLatticeComplex__type_check__()
         
@@ -845,14 +845,14 @@ class SuperLatticeComplex(object):
                     if key not in self._films_.keys():
                         crystal = create_layer(self.crystals[j2], self.crystals[i], leftover)
                         self._films_[key] = LayerSave(crystal)
-                    self._sample_.append(self._films_[key])
+                    self._Layers_.append(self._films_[key])
                     layer -= 1-leftover
                     leftover = 0.0
                 else:
                     key = '{}-{}'.format(i, 1)
                     if key not in self._films_.keys():
                         self._films_[key] = LayerSave(self.crystals[i])
-                    self._sample_.append(self._films_[key])
+                    self._Layers_.append(self._films_[key])
                     layer -= 1
                 
                 layers -= 1
@@ -882,7 +882,7 @@ class SuperLatticeComplex(object):
     
     def get_thickness(self):
         """returns the total thickness of the superlatice"""
-        return self.get_Lambda()*self.bilayers
+        return self.get_Lambda()*self.repetitions
 
 ##################
 # Help Functions #
