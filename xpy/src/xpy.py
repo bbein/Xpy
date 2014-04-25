@@ -242,13 +242,13 @@ class CrystalStructure(object):
             words = line.split()
             if words:
                 if words[0]   == "x": 
-                    pos[0] = float(words[1]) * self.lattice_parameters[0]
+                    pos[0] = float(words[1])
                     count += 1
                 elif words[0] == "y": 
-                    pos[1] = float(words[1]) * self.lattice_parameters[1]
+                    pos[1] = float(words[1])
                     count += 1
                 elif words[0] == "z": 
-                    pos[2] = float(words[1]) * self.lattice_parameters[2]
+                    pos[2] = float(words[1])
                     count += 1
                 if (count == 3): break 
             line = usedfile.readline()
@@ -288,9 +288,9 @@ class CrystalStructure(object):
         f.write('c ' + str(self.lattice_parameters[2]) + '\n')
         for atom in self.atoms:
             f.write('element ' + str(atom.form.atom) + '\n')
-            f.write('x ' + str(atom.pos[0]/self.lattice_parameters[0]) + '\n')
-            f.write('y ' + str(atom.pos[1]/self.lattice_parameters[1]) + '\n')
-            f.write('z ' + str(atom.pos[2]/self.lattice_parameters[2]) + '\n')
+            f.write('x ' + str(atom.pos[0]) + '\n')
+            f.write('y ' + str(atom.pos[1]) + '\n')
+            f.write('z ' + str(atom.pos[2]) + '\n')
         f.close()
         
     def _calc_structure_factor_(self, q, sinomega):
@@ -306,13 +306,12 @@ class CrystalStructure(object):
         for atom in self.atoms:
             multi = 0.0
             for i in range(len(q)):
-                multi += atom.pos[i]*q[i] 
+                multi += atom.pos[i]*self.lattice_parameters[i]*q[i] 
             structure_factor +=(atom.form.get_value(mq) * 
                                  mc.exp(-1.0j * multi - 
-                                        (self.damping * sinomega *
-                                         (self.lattice_parameters[2] - 
-                                          atom.pos[2]
-                                         ) 
+                                        (self.damping / sinomega *
+                                         self.lattice_parameters[2] * 
+                                          (1 - atom.pos[2])
                                         ) 
                                        )     
                                 )
@@ -383,7 +382,7 @@ class Layer(object):
         a = self.crystal.lattice_parameters[0]
         b = self.crystal.lattice_parameters[1]
         c = self.crystal.lattice_parameters[2]
-        factor = self.crystal.damping * c * sinomega
+        factor = self.crystal.damping * c / sinomega
         self._iaq_ = -1J * a * q[0] - factor 
         self._ibq_ = -1J * b * q[1] - factor 
         self._icq_ = -1J * c * q[2] - factor
@@ -411,7 +410,7 @@ class Layer(object):
             q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return mc.exp( (1 + self.delta) * self._icq_.imag)
+        return mc.exp( (1 + self.delta) * self._icq_)
         
     def get_reflection(self, q, sinomega):
         """returns the complex reflection value of the Film.
@@ -900,7 +899,7 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
         q[2] = l*2*m.pi/base_struc.lattice_parameters[2]
         absq = sum([x**2 for x in q])
         if (sinomegain == 0):
-            sinomega = 4.0 * m.pi / absq / wavelength
+            sinomega = absq * wavelength / 4 / m.pi
         else:
             sinomega = sinomegain
         lin = abs(sample.get_reflection(q, sinomega))
@@ -995,9 +994,9 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
                 atomtype = a21
             form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
             pos = [0.0,0.0,0.0]
-            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L * a
-            pos[1] =(    0.0 + random.randrange(-1,1) * size) * b
-            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers * c
+            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L
+            pos[1] =(    0.0 + random.randrange(-1,1) * size) 
+            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #center atom
@@ -1007,33 +1006,33 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
                 atomtype = a22
             form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
             pos = [0.0,0.0,0.0]
-            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
-            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
-            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
+            pos[1] =(    0.5 + random.randrange(-1,1) * size)
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 1
             form = FormFactor(path=scriptpath+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
-            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
-            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
-            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers * c
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
+            pos[1] =(    0.5 + random.randrange(-1,1) * size)
+            pos[2] =(i + 1.0 + zoffset + random.randrange(-1,1) * size) / layers
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 2
             form = FormFactor(path=scriptpath+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
-            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L * a
-            pos[1] =(    0.0 + random.randrange(-1,1) * size) * b
-            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
+            pos[1] =(    0.0 + random.randrange(-1,1) * size)
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 3
             form = FormFactor(path=scriptpath+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
-            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L * a
-            pos[1] =(    0.5 + random.randrange(-1,1) * size) * b
-            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers * c
+            pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L
+            pos[1] =(    0.5 + random.randrange(-1,1) * size)
+            pos[2] =(i + 0.5 + zoffset + random.randrange(-1,1) * size) / layers
             atom = Atom(form, pos)
             crystal.add_atom(atom)
     return crystal
