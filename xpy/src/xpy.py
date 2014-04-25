@@ -306,7 +306,7 @@ class CrystalStructure(object):
         for atom in self.atoms:
             multi = 0.0
             for i in range(len(q)):
-                multi += atom.pos[i]*self.lattice_parameters[i]*q[i] 
+                multi += (1 - atom.pos[i])*self.lattice_parameters[i]*q[i] 
             structure_factor +=(atom.form.get_value(mq) * 
                                  mc.exp(-1.0j * multi - 
                                         (self.damping / sinomega *
