@@ -751,9 +751,9 @@ class Sample(object):
            q: scattering vector
            sinomega: sin of angle between surface and incedent beam
         """
-        phase = 0.0 + 0.0j
+        phase = 1.0+0.0j
         for layer in self._Layers_:
-            phase += layer.get_phase_shift(q, sinomega)
+            phase *= layer.get_phase_shift(q, sinomega)
         return phase
     
     def get_reflection(self, q, sinomega):
@@ -762,13 +762,13 @@ class Sample(object):
            q: wave vector
            sinomega: sin of angle between surface and incedent beam
         """
-        r = 0.0 + 0.0j
-        for i in range(len(self._Layers_)):
-            temp = self._Layers_[i].get_reflection(q, sinomega)
-            for j in range(i+1, len(self._Layers_)):
-                temp *= self._Layers_[j].get_phase_shift(q, sinomega)
-            r += temp 
-        return r
+        r = 0.0 + 0.0j        
+        phase = 1.0+0.0j
+        for layer in reversed(self._Layers_):
+            r += layer.get_reflection(q, sinomega)*phase
+            phase *= layer.get_phase_shift(q, sinomega)
+        return r 
+            
     
     def get_thickness(self):
         """returns the thickness of the sample."""
