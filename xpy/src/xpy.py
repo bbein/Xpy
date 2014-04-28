@@ -624,6 +624,72 @@ class ThinFilmSave(LayerSave, ThinFilm):
         ThinFilm.__init__(self, crystal, layers)
         LayerSave.__init__(self, crystal)  
 
+class ComplexThinFilm(Layer):
+        
+    
+    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
+        """initializes the class data and checks data types
+          
+           crystal: SimpleCrystalStructure of the film
+           layers:  number of layers in the film
+        """
+        super(ComplexThinFilm, self).__init__(crystal)
+        self.layers = layers
+        self.width = width
+        self.filmType = filmType
+        self._icnq_ = 0.0+0.0j   
+        self._ComplexThinFilm__type_check__()
+        self._init_P_()        
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           layers -> int 
+        """
+        assert isinstance(self.layers, (float)) , 'layers needs to be a float'
+        assert isinstance(self.width, (float)) , 'width needs to be a float'
+        #assert isinstance(self.filmType, (ThinFilm)) , 'filmType needs to be a ThinFilm'
+        
+    _ComplexThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def _init_P_(self):
+        """initializes the probbabileties for different Thicknesses"""
+        self._P_ = []
+        self._films_ = []
+        minimum = int(self.layers - 3 * self.width) #int always rounds down
+        maximum = int(round(self.layers + 3 * self.width + 0.5)) #+0.5 to round up
+        summe = 0
+        for i in range(minimum, maximum):
+            value = m.exp((i - self.layers)**2/(-2 * self.width**2))
+            self._P_.append(value)
+            self._films_.append(self.filmType(self.crystal,i))
+            summe += value
+        for i in range(len(self._P_)):
+            self._P_[i] /= summe
+            
+    def _calc_reflection_(self, q, sinomega):
+        """calculates the reflection and phase shift of the Film."""
+        r = 0
+        i = 0
+        for film in self._films_:
+            r += film._calc_reflection_(q, sinomega) * self._P_[i]
+            i += 1 
+        return r      
+
+    def _calc_phase_shift_(self, q, sinomega):
+        """returns the phase shift of the layer"""
+        return mc.exp( (self.layers) * self.get_thickness() * 1j * q)
+    
+    def get_thickness(self):
+        """returns the thickness of the film."""
+        t = 0
+        i = 0
+        for film in self._films_:
+            t += film.get_thickness * self._P_[i]
+            i += 1
+        return 
+            
+        
 ################
 # SuperLattice #
 ################
