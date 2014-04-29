@@ -4,10 +4,14 @@ import fractions
 import random
 
 words = __file__.split("/")
-scriptpath = ""
+_SCRIPTPATH_ = ""
 for i in range(len(words)):
     if ( i == len(words)-3): break
-    scriptpath += words[i]+"/"
+    _SCRIPTPATH_ += words[i]+"/"
+    
+_NUMBER_ = (int, float) # np is not working in 3.3 yet ,np.floating, np.integer)
+
+
 
 ########
 # Atom #
@@ -51,7 +55,7 @@ class Atom(object):
         assert isinstance(self.form, FormFactor) , 'form needs to be a FormFactor'
         assert (isinstance(self.pos, list) or (len(self.pos) != 3)) , 'a needs to be a list with 3 elements'
         for i in range(len(self.pos)):
-            assert (isinstance(self.pos[i], (float, int))) , 'pos' + str(i) + 'needs to be a number'
+            assert (isinstance(self.pos[i], _NUMBER_)) , 'pos' + str(i) + 'needs to be a number'
             
     _Atom__type_check__ = __type_check__ #private copy of the function to avoid overload
 
@@ -114,15 +118,15 @@ class FormFactor(object):
             b -> list
             b[i] -> float
         """
-        assert isinstance(self.q, float) , 'q needs to be a float'
-        assert isinstance(self.value, float) , 'value needs to be a float'
+        assert isinstance(self.q, _NUMBER_) , 'q needs to be a Number'
+        assert isinstance(self.value, _NUMBER_) , 'value needs to be a Number'
         assert isinstance(self.atom, str) , 'atom needs to be a string'
         assert (isinstance(self.a, list) or (len(self.a) != 5)) , 'a needs to be a list with 5 elements'
         for i in range(len(self.a)):
-            assert (isinstance(self.a[i], (float, int))) , 'a' + str(i) + 'needs to be a number'
+            assert (isinstance(self.a[i], _NUMBER_)) , 'a' + str(i) + 'needs to be a Number'
         assert (isinstance(self.b, list) or (len(self.b) != 4)) , 'b needs to be a list with 4 elements' 
         for i in range(len(self.b)):
-            assert (isinstance(self.b[i], (float, int))) , 'b' + str(i) + 'needs to be a number'
+            assert (isinstance(self.b[i], _NUMBER_)) , 'b' + str(i) + 'needs to be a Number'
 
     _FormFactor__type_check__ = __type_check__ #private copy of the function to avoid overload
     
@@ -184,9 +188,9 @@ class CrystalStructure(object):
         else:
             self.atoms = []
         if (lattice_parameters):
-            self.lattice_parameters = lattice_parameters
+            self._lattice_parameters_ = lattice_parameters
         else:
-            self.lattice_parameters = [1.0,1.0,1.0]
+            self._lattice_parameters_ = [1.0,1.0,1.0]
         self._structure_factor_ = 0.0+0.0j
         self._q_ = [0.0,0.0,0.0]
         self._wavelength_ = 0.0
@@ -200,9 +204,9 @@ class CrystalStructure(object):
         """Returns the data in a structured form.
         
         """
-        stri = ("Lattice parameters: a=" + str(self.lattice_parameters[0]) +
-                " b="+ str(self.lattice_parameters[1]) +
-                " c="+ str(self.lattice_parameters[2]) + "\n"
+        stri = ("Lattice parameters: a=" + str(self._lattice_parameters_[0]) +
+                " b="+ str(self._lattice_parameters_[1]) +
+                " c="+ str(self._lattice_parameters_[2]) + "\n"
                 )
         stri += "damping: " + str(self.damping) + '\n'
         for atom in self.atoms:
@@ -222,10 +226,10 @@ class CrystalStructure(object):
             _q_[i[ -> float
             _formfactor_ -> complex
         """
-        assert isinstance(self.damping, float) , 'damping needs to be a float'
-        assert (isinstance(self.lattice_parameters, list) or (len(self.lattice_parameters) != 3)) , 'lattice_parameters needs to be a list with 3 elements' 
-        for i in range(len(self.lattice_parameters)):
-            assert (isinstance(self.lattice_parameters[i], float)) , 'lattice_parameters[' + str(i) + '] needs to be a number'
+        assert isinstance(self.damping, _NUMBER_) , 'damping needs to be a Number'
+        assert (isinstance(self._lattice_parameters_, list) or (len(self._lattice_parameters_) != 3)) , 'lattice_parameters needs to be a list with 3 elements' 
+        for i in range(len(self._lattice_parameters_)):
+            assert (isinstance(self._lattice_parameters_[i], _NUMBER_)) , 'lattice_parameters[' + str(i) + '] needs to be a number'
         assert (isinstance(self.atoms, list)) , 'atoms needs to be a list ' 
         for i in range(len(self.atoms)):
             assert (isinstance(self.atoms[i], Atom)) , 'atoms[' + str(i) + '] needs to be a Atom'
@@ -234,7 +238,7 @@ class CrystalStructure(object):
             
     def _add_atom_(self, usedfile, atomtype):
         """adds the next atom in the file to the atom list """
-        form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
+        form = FormFactor(path=_SCRIPTPATH_+"/atoms/" + atomtype + ".at")
         pos = [0.0,0.0,0.0];
         line = usedfile.readline()
         count = 0
@@ -272,9 +276,9 @@ class CrystalStructure(object):
             words = line.split()
             if words:
                 if words[0]   == "element": self._add_atom_(f, words[1])
-                elif words[0] == "a": self.lattice_parameters[0] = float(words[1])
-                elif words[0] == "b": self.lattice_parameters[1] = float(words[1])
-                elif words[0] == "c": self.lattice_parameters[2] = float(words[1])
+                elif words[0] == "a": self._lattice_parameters_[0] = float(words[1])
+                elif words[0] == "b": self._lattice_parameters_[1] = float(words[1])
+                elif words[0] == "c": self._lattice_parameters_[2] = float(words[1])
                 elif words[0] == "damping": self.damping = float(words[1])
                 
             line = f.readline()
@@ -283,9 +287,9 @@ class CrystalStructure(object):
     def save_file(self, path):
         """saves the structure to the file path"""
         f = open(path, 'w')
-        f.write('a ' + str(self.lattice_parameters[0]) + '\n')
-        f.write('b ' + str(self.lattice_parameters[1]) + '\n')
-        f.write('c ' + str(self.lattice_parameters[2]) + '\n')
+        f.write('a ' + str(self._lattice_parameters_[0]) + '\n')
+        f.write('b ' + str(self._lattice_parameters_[1]) + '\n')
+        f.write('c ' + str(self._lattice_parameters_[2]) + '\n')
         for atom in self.atoms:
             f.write('element ' + str(atom.form.atom) + '\n')
             f.write('x ' + str(atom.pos[0]) + '\n')
@@ -306,11 +310,11 @@ class CrystalStructure(object):
         for atom in self.atoms:
             multi = 0.0
             for i in range(len(q)):
-                multi += (1 - atom.pos[i])*self.lattice_parameters[i]*q[i] 
+                multi += (1 - atom.pos[i])*self._lattice_parameters_[i]*q[i] 
             structure_factor +=(atom.form.get_value(mq) * 
                                  mc.exp(-1.0j * multi - 
                                         (self.damping / sinomega *
-                                         self.lattice_parameters[2] * 
+                                         self._lattice_parameters_[2] * 
                                           (1 - atom.pos[2])
                                         ) 
                                        )     
@@ -324,6 +328,33 @@ class CrystalStructure(object):
             sinomega: sin(angle between incident beam and sample surface
         """
         return self._calc_structure_factor_(q, sinomega)
+    
+    @property
+    def a(self):
+        """a lattice parameter"""
+        return self._lattice_parameters_[0]
+
+    @a.setter
+    def a(self, value):
+        self._lattice_parameters_[0] = value
+        
+    @property
+    def b(self):
+        """b lattice parameter"""
+        return self._lattice_parameters_[1]
+
+    @b.setter
+    def b(self, value):
+        self._lattice_parameters_[1] = value
+        
+    @property
+    def c(self):
+        """c lattice parameter"""
+        return self._lattice_parameters_[2]
+
+    @c.setter
+    def c(self, value):
+        self._lattice_parameters_[2] = value
 
 #########################
 # CrystalStructureCheck #
@@ -344,74 +375,33 @@ class CrystalStructureCheck(CrystalStructure):
             self._sinomega_ = sinomega
         return self._structure_factor_
 
-#########
-# Layer #
-#########
 
-class Layer(object):
+##############
+# BasicLayer #
+##############
+
+class BasicLayer(object):
         
-    def __init__(self, crystal):
-        """initializes the class data and checks data types
-          
-           crystal CrystalStructure of the film 
-        """
-        self.crystal= crystal
-        self._icq_ = self._ibq_ = self._iaq_ = 0.0
-        self.delta = 0.0
+    def __init__(self):
+        """initializes the class data and checks data types"""
+        pass
         
-        self._Layer__type_check__()
-    
-    def __str__(self):
-        """Returns the data in a structured form.
-           
-           returns its crystal structure 
-        """
-        return self.crystal.__str__()
-    
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           crystal -> Crystalstructure 
-        """
-        assert isinstance(self.crystal, CrystalStructure) , 'crystal needs to be a SimpleCrystalstructure'
-        
-    _Layer__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def _set_icq_(self, q, sinomega):
-        """recalculates the values for i*(latticeparameters*q)"""                   
-        a = self.crystal.lattice_parameters[0]
-        b = self.crystal.lattice_parameters[1]
-        c = self.crystal.lattice_parameters[2]
-        factor = self.crystal.damping * c / sinomega
-        self._iaq_ = -1J * a * q[0] - factor 
-        self._ibq_ = -1J * b * q[1] - factor 
-        self._icq_ = -1J * c * q[2] - factor
-    
-    def _calc_amplitude_(self, q):
-        """returns calculates the scattering amplitude"""
-        a = self.crystal.lattice_parameters[0]
-        b = self.crystal.lattice_parameters[1]
-        R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
-        amp1d = 4 * m.pi * R / m.sqrt(sum([x**2 for x in q])) / a / b
-        return (1j*(amp1d) * (1 - mc.exp(self._icq_.real))**2)
-    
     def _calc_reflection_(self, q, sinomega):
-        """calculates the complex reflection value of the Film."""
-        self._set_icq_(q, sinomega)
-        amp = self._calc_amplitude_(q)
-        r = (amp * self.crystal.get_structure_factor(q, sinomega) / 
-             ((1 - mc.exp(self._iaq_)) * (1 - mc.exp(self._ibq_)))             
-            )
-        return r
+        """calculates the complex reflection value of the Basic Layer."""
+        return 1
     
     def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the layer
+        """returns the phase shift of the Basic layer
         
             q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return mc.exp( (1 + self.delta) * self._icq_)
+        return 1
         
+    def _calc_get_thickness_(self):
+        """returns the thickness of the Basic Layer"""
+        return 1
+    
     def get_reflection(self, q, sinomega):
         """returns the complex reflection value of the Film.
              
@@ -430,23 +420,22 @@ class Layer(object):
     
     def get_thickness(self):
         """returns the thickness of the film."""
-        return (1 + self.delta)*self.crystal.lattice_parameters[2]
+        return self._calc_get_thickness_()
 
-##############
-# LayerCheck #
-##############
+###################
+# BasicLayerCheck #
+###################
 
-class LayerCheck(Layer):
+class BasicLayerCheck(BasicLayer):
     
-    def __init__(self, crystal):
-        Layer.__init__(self, crystal)
+    def __init__(self):
         self._q_ = [0,0,0]
         self._sinomega_ = 0.0
         self._reflection_ = 0.0 + 0.0j
         self._phase_shift_ = 0.0 + 0.0j
     
     def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Film.
+        """returns the complex reflection value of the Basic Layer.
              
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
@@ -480,14 +469,13 @@ class LayerCheck(Layer):
             return True
         return False
 
-#############
-# LayerSave #
-#############
+##################
+# BasicLayerSave #
+##################
 
-class LayerSave(Layer):
+class BasicLayerSave(BasicLayer):
     
-    def __init__(self, crystal):
-        Layer.__init__(self, crystal)
+    def __init__(self):
         self._data_ = []
         self._reflection_ = []
         self._phase_shift_ = []
@@ -516,7 +504,7 @@ class LayerSave(Layer):
         return self._counter_
         
     def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Film.
+        """returns the complex reflection value of the Basic Layer.
              
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
@@ -524,13 +512,105 @@ class LayerSave(Layer):
         return self._reflection_[self._check_q_s_(q, sinomega)]
     
     def get_phase_shift(self, q, sinomega):
-        """returns the phase of the film.
+        """returns the phase of the Basic Layer.
 
            q: scattering vector
            sinomega: sin angle between surface plane and incedent beam 
         """
         return self._phase_shift_[self._check_q_s_(q, sinomega)]
+
+#########
+# Layer #
+#########
+
+class Layer(BasicLayer):
+        
+    def __init__(self, crystal):
+        """initializes the class data and checks data types
+          
+           crystal CrystalStructure of the film 
+        """
+        BasicLayer.__init__(self)
+        self.crystal= crystal
+        self._icq_ = self._ibq_ = self._iaq_ = 0.0
+        self.delta = 0.0
+        
+        self._Layer__type_check__()
+    
+    def __str__(self):
+        """Returns the data in a structured form.
            
+           returns its crystal structure 
+        """
+        return self.crystal.__str__()
+    
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           crystal -> Crystalstructure 
+        """
+        assert isinstance(self.crystal, CrystalStructure) , 'crystal needs to be a SimpleCrystalstructure'
+        
+    _Layer__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def _set_icq_(self, q, sinomega):
+        """recalculates the values for i*(latticeparameters*q)"""                   
+        a = self.crystal.a
+        b = self.crystal.b
+        c = self.crystal.c
+        factor = self.crystal.damping * c / sinomega
+        self._iaq_ = -1J * a * q[0] - factor 
+        self._ibq_ = -1J * b * q[1] - factor 
+        self._icq_ = -1J * c * q[2] - factor
+    
+    def _calc_amplitude_(self, q):
+        """returns calculates the scattering amplitude"""
+        a = self.crystal.a
+        b = self.crystal.b
+        R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
+        amp1d = 4 * m.pi * R / m.sqrt(sum([x**2 for x in q])) / a / b
+        return (1j*(amp1d) * (1 - mc.exp(self._icq_.real))**2)
+    
+    def _calc_reflection_(self, q, sinomega):
+        """calculates the complex reflection value of the Film."""
+        self._set_icq_(q, sinomega)
+        amp = self._calc_amplitude_(q)
+        r = (amp * self.crystal.get_structure_factor(q, sinomega) / 
+             ((1 - mc.exp(self._iaq_)) * (1 - mc.exp(self._ibq_)))             
+            )
+        return r
+    
+    def _calc_phase_shift_(self, q, sinomega):
+        """returns the phase shift of the layer
+        
+            q: wave vector
+           sinomega: sin(angle between incident beam and sample surface
+        """
+        return mc.exp( (1 + self.delta) * self._icq_)
+    
+    def _calc_thickness_(self):
+        """returns the thickness of the film."""
+        return (1 + self.delta)*self.crystal.c
+
+##############
+# LayerCheck #
+##############
+
+class LayerCheck(Layer, BasicLayerCheck):
+    
+    def __init__(self, crystal):
+        Layer.__init__(self, crystal)
+        BasicLayerCheck.__init__(self)
+
+#############
+# LayerSave #
+#############
+
+class LayerSave(Layer, BasicLayerSave):
+    
+    def __init__(self, crystal):
+        Layer.__init__(self, crystal)
+        BasicLayerSave.__init__(self)          
 
 #############
 # ThickFilm #
@@ -539,7 +619,7 @@ class LayerSave(Layer):
 class ThickFilm (Layer):
 
     def _calc_reflection_(self, q, sinomega):
-        """calculates the complex reflection value of the Film."""
+        """calculates the complex reflection value of the Thick Film."""
         r = Layer._calc_reflection_(self, q, sinomega)
         r *= 1 / (1 - mc.exp(self._icq_))
         r = 2 * r / (1 + m.sqrt(1 + 4 * abs(r**2)))
@@ -602,7 +682,7 @@ class ThinFilm(Layer):
     
     def get_thickness(self):
         """returns the thickness of the film."""
-        return (self._layers_ + self.delta)*self.crystal.lattice_parameters[2]
+        return (self._layers_ + self.delta)*self.crystal.c
 
 #################
 # ThinFilmCheck #
@@ -624,67 +704,70 @@ class ThinFilmSave(LayerSave, ThinFilm):
         ThinFilm.__init__(self, crystal, layers)
         LayerSave.__init__(self, crystal)  
 
-###################
-# ComplexThinFilm #
-###################
+#############
+# MixSample #
+#############
 
-class ComplexThinFilm(Layer):
-        
+class MixSample(BasicLayer):
     
-    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
+    def __init__(self, films = None, probabileties = None):
         """initializes the class data and checks data types
           
-           crystal: SimpleCrystalStructure of the film
-           layers:  number of layers in the film
+           films: different films in the Sample
         """
-        super(ComplexThinFilm, self).__init__(crystal)
-        self.layers = layers
-        self.width = width
-        self.filmType = filmType
-        self._icnq_ = 0.0+0.0j   
-        self._ComplexThinFilm__type_check__()
-        self._init_P_()        
+        self._films_ = []
+        self._P_ = []
+        if (films):
+            for layer in films:
+                self._films_.append(layer)
+        if (probabileties):
+            for p in probabileties:
+                self._P_.append(p)
+        self._MixSample__type_check__()
         
     def __type_check__(self):
         """checks the class data to have the right types
         
-           layers -> int 
+           _films_ -> list 
+           _films_[i] -> Layer
+           _P_ -> list 
+           _P_[i] -> number
         """
-        assert isinstance(self.layers, (float)) , 'layers needs to be a float'
-        assert isinstance(self.width, (float)) , 'width needs to be a float'
-        #assert isinstance(self.filmType, (ThinFilm)) , 'filmType needs to be a ThinFilm'
-        
-    _ComplexThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def _init_P_(self):
-        """initializes the probbabileties for different Thicknesses"""
-        self._P_ = []
-        self._films_ = []
-        minimum = int(self.layers - 3 * self.width) #int always rounds down
-        maximum = int(round(self.layers + 3 * self.width + 0.5)) #+0.5 to round up
-        summe = 0
-        for i in range(minimum, maximum):
-            value = m.exp((i - self.layers)**2/(-2 * self.width**2))
-            self._P_.append(value)
-            self._films_.append(self.filmType(self.crystal,i))
-            summe += value
+        assert isinstance(self._films_, list) , '_films_ needs to be an list'
+        for i in range(len(self._films_)):
+            assert (isinstance(self._films_[i], (BasicLayer))) , '_films_[' + str(i) + '] needs to be a Basic Layer'
+        assert isinstance(self._P_, list) , '_films_ needs to be an list'
         for i in range(len(self._P_)):
-            self._P_[i] /= summe
-            
+            assert (isinstance(self._P_[i], _NUMBER_)) , '_films_[' + str(i) + '] needs to be a Number'
+        self.__check_P__()
+    
+    _MixSample__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def __check_P__(self):
+        """cheks that the probabileties are still right"""
+        assert (len(self._P_) == len(self._films_)) , 'each film needs a probability'
+        if (self._P_):
+            assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
+    
     def _calc_reflection_(self, q, sinomega):
-        """calculates the reflection and phase shift of the Film."""
-        r = 0
-        i = 0
-        for film in self._films_:
-            r += film._calc_reflection_(q, sinomega) * self._P_[i]
-            i += 1 
-        return r      
-
+        """returns the complex reflection value of the Sample.
+             
+           q: wave vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        self.__check_P__()
+        r = 0.0 + 0.0j
+        i = 0        
+        for layer in self._films_:
+            r += layer.get_reflection(q, sinomega) * self._P_[i]
+            i += 1
+        return r
+    
     def _calc_phase_shift_(self, q, sinomega):
         """returns the phase shift of the layer"""
         return mc.exp( (self.layers) * self.get_thickness() * 1j * q)
     
-    def get_thickness(self):
+    def _calc_thickness_(self):
         """returns the thickness of the film."""
         t = 0
         i = 0
@@ -692,26 +775,77 @@ class ComplexThinFilm(Layer):
             t += film.get_thickness * self._P_[i]
             i += 1
         return 
+
+###################
+# ComplexThinFilm #
+###################
+
+class ComplexThinFilm(MixSample):
+        
+    
+    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
+        """initializes the class data and checks data types
+          
+           crystal: SimpleCrystalStructure of the film
+           layers:  number of layers in the film
+           width: width of the gausian distribution around layers
+           filmType: the used filmtype to calculate the thinfilms
+        """
+        MixSample.__init__(self)
+        self._crystal_ = crystal
+        self._layers_ = layers
+        self._width_ = width
+        self._filmType_ = filmType  
+        self._ComplexThinFilm__type_check__()
+        self._init_P_()        
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           layers -> number
+           width -> number 
+        """
+        assert isinstance(self._layers_, _NUMBER_) , 'layers needs to be a Number'
+        assert isinstance(self._width_, _NUMBER_) , 'width needs to be a Number'
+        assert isinstance(self._crystal_, CrystalStructure) , 'crystal needs to be a CrystalStructure'
+        #assert isinstance(self.filmType, (ThinFilm)) , 'filmType needs to be a ThinFilm'
+        
+    _ComplexThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def _init_P_(self):
+        """initializes the probabilities for different Thicknesses"""
+        self._P_ = []
+        self._films_ = []
+        minimum = int(self._layers_ - 3 * self._width_) #int always rounds down
+        maximum = int(round(self._layers_ + 3 * self._width_ + 0.5)) #+0.5 to round up
+        summe = 0
+        for i in range(minimum, maximum):
+            value = m.exp((i - self._layers_)**2/(-2 * self._width_**2))
+            self._P_.append(value)
+            self._films_.append(self.filmType(self._crystal_,i))
+            summe += value
+        for i in range(len(self._P_)):
+            self._P_[i] /= summe
             
 ########################
 # ComplexThinFilmCheck #
 ########################
 
-class ComplexThinFilmCheck(LayerCheck, ComplexThinFilm):    
+class ComplexThinFilmCheck(BasicLayerCheck, ComplexThinFilm):    
     
     def __init__(self, crystal, layers=1, filmType=ThinFilm):
         ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
-        LayerCheck.__init__(self, crystal) 
+        BasicLayerCheck.__init__(self) 
  
 #######################
 # ComplexThinFilmSave #
 #######################
 
-class ComplexThinFilmSave(LayerSave, ComplexThinFilm, filmType=ThinFilm):    
+class ComplexThinFilmSave(BasicLayerSave, ComplexThinFilm):    
     
-    def __init__(self, crystal, layers=1):
+    def __init__(self, crystal, layers=1, filmType=ThinFilm):
         ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
-        LayerSave.__init__(self, crystal)   
+        BasicLayerSave.__init__(self)   
         
 ################
 # SuperLattice #
@@ -870,7 +1004,7 @@ class Sample(object):
         """adds the layer to the top of the sample."""
         assert (isinstance(layer, (Layer, SuperLattice))) , 'layer needs to be a Layer'
         self._Layers_.append(layer)
-
+    
 #######################
 # SuperLatticeComplex #
 #######################
@@ -964,7 +1098,7 @@ class SuperLatticeComplex(Sample):
         l=0.0
         n = 0
         for crystal in self.crystals:
-            l += crystal.lattice_parameters[2] * self.layers[n]
+            l += crystal.c * self.layers[n]
             n += 1
         return l
     
@@ -980,12 +1114,12 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
 
     q = [0.0,0.0,0.0]
     steps_l = (l_max-l_min)/l_step
-    q[0] = h*2*m.pi/base_struc.lattice_parameters[0]
-    q[1] = k*2*m.pi/base_struc.lattice_parameters[1]
+    q[0] = h*2*m.pi/base_struc.a
+    q[1] = k*2*m.pi/base_struc.b
     scan = []
     for i in range(int(steps_l)):
         l=l_min+i*l_step
-        q[2] = l*2*m.pi/base_struc.lattice_parameters[2]
+        q[2] = l*2*m.pi/base_struc.c
         absq = sum([x**2 for x in q])
         if (sinomegain == 0):
             sinomega = absq * wavelength / 4 / m.pi
@@ -1027,9 +1161,9 @@ def alldividers(number):
 
 def create_layer(struc1, struc2, amount1):
     L = get_multi(amount1) 
-    a = max(struc1.lattice_parameters[0],struc2.lattice_parameters[0])
-    b = max(struc1.lattice_parameters[1],struc2.lattice_parameters[1])
-    c = max(struc1.lattice_parameters[2],struc2.lattice_parameters[2])
+    a = max(struc1.a,struc2.a)
+    b = max(struc1.b,struc2.b)
+    c = max(struc1.c,struc2.c)
     crystal = CrystalStructure([a*L,b,c])
     for j in range(L):
         if (j < amount1*L):
@@ -1054,9 +1188,9 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
         layers = int(layers)+1
     (a, b, c) = (a_in*L*10**(-10), a_in*10**(-10) ,c_in*layers*10**(-10) )
     crystal = CrystalStructureCheck()
-    crystal.lattice_parameters[0] = a
-    crystal.lattice_parameters[1] = b
-    crystal.lattice_parameters[2] = c
+    crystal.a = a
+    crystal.b = b
+    crystal.c = c
     
     atom_kind = 1
     l = l1
@@ -1081,7 +1215,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
                 atomtype = a11
             else:
                 atomtype = a21
-            form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
+            form = FormFactor(path=_SCRIPTPATH_+"/atoms/" + atomtype + ".at")
             pos = [0.0,0.0,0.0]
             pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L
             pos[1] =(    0.0 + random.randrange(-1,1) * size) 
@@ -1093,7 +1227,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
                 atomtype = a12
             else:
                 atomtype = a22
-            form = FormFactor(path=scriptpath+"/atoms/" + atomtype + ".at")
+            form = FormFactor(path=_SCRIPTPATH_+"/atoms/" + atomtype + ".at")
             pos = [0.0,0.0,0.0]
             pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
             pos[1] =(    0.5 + random.randrange(-1,1) * size)
@@ -1101,7 +1235,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 1
-            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            form = FormFactor(path=_SCRIPTPATH_+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
             pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
             pos[1] =(    0.5 + random.randrange(-1,1) * size)
@@ -1109,7 +1243,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 2
-            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            form = FormFactor(path=_SCRIPTPATH_+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
             pos[0] =(j + 0.5 + random.randrange(-1,1) * size) / L
             pos[1] =(    0.0 + random.randrange(-1,1) * size)
@@ -1117,7 +1251,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
             atom = Atom(form, pos)
             crystal.add_atom(atom)
             #oxygen 3
-            form = FormFactor(path=scriptpath+"/atoms/O.at")
+            form = FormFactor(path=_SCRIPTPATH_+"/atoms/O.at")
             pos = [0.0,0.0,0.0]
             pos[0] =(j + 0.0 + random.randrange(-1,1) * size) / L
             pos[1] =(    0.5 + random.randrange(-1,1) * size)
