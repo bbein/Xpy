@@ -398,7 +398,7 @@ class BasicLayer(object):
         """
         return 1
         
-    def _calc_get_thickness_(self):
+    def _calc_thickness_(self):
         """returns the thickness of the Basic Layer"""
         return 1
     
@@ -420,7 +420,7 @@ class BasicLayer(object):
     
     def get_thickness(self):
         """returns the thickness of the film."""
-        return self._calc_get_thickness_()
+        return self._calc_thickness_()
 
 ###################
 # BasicLayerCheck #
@@ -680,7 +680,7 @@ class ThinFilm(Layer):
         """returns the phase shift of the layer"""
         return mc.exp( (self._layers_ + self.delta) * self._icq_)
     
-    def get_thickness(self):
+    def _calc_thickness_(self):
         """returns the thickness of the film."""
         return (self._layers_ + self.delta)*self.crystal.c
 
@@ -768,7 +768,7 @@ class Sample(BasicLayer):
         return r 
             
     
-    def _calc_thickness(self):
+    def _calc_thickness_(self):
         """returns the thickness of the sample."""
         thickness = 0.0 + 0.0j
         for layer in self._Layers_:
@@ -821,9 +821,11 @@ class MixSample(BasicLayer):
     
     def __check_P__(self):
         """checks that the probabilities are still right"""
+        eps = 0.0001
         assert (len(self._P_) == len(self._films_)) , 'each film needs a probability'
         if (self._P_):
-            assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
+            if (sum(self._P_) > 1.0+eps or sum(self._P_) < 1.0-eps):
+                assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
     
     def _calc_reflection_(self, q, sinomega):
         """returns the complex reflection value of the Sample.
@@ -848,9 +850,9 @@ class MixSample(BasicLayer):
         t = 0
         i = 0
         for film in self._films_:
-            t += film.get_thickness * self._P_[i]
+            t += film.get_thickness() * self._P_[i]
             i += 1
-        return 
+        return t
 
 ###################
 # ComplexThinFilm #
