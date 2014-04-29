@@ -704,6 +704,82 @@ class ThinFilmSave(LayerSave, ThinFilm):
         ThinFilm.__init__(self, crystal, layers)
         LayerSave.__init__(self, crystal)  
 
+##########
+# Sample #
+##########
+
+class Sample(BasicLayer):
+        
+    def __init__(self, substrate = None, electrode = None, film = None, layers = None):
+        """initializes the class data and checks data types
+          
+           Substrate: substrate of the Sample 
+           Electrode: Electrode of the Sample
+           Film: Film of the Sample
+           Layers: any number of Layers to add to the sample
+        """
+        
+        self._Layers_ = []
+        if (substrate):
+            self._Layers_.append(substrate)
+        if (electrode):
+            self._Layers_.append(electrode)
+        if (film):
+            self._Layers_.append(film)
+        if (layers):
+            for layer in layers:
+                self._Layers_.append(layer)
+        self._Sample__type_check__()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           _Layers_ -> list 
+           _Layers_[i] -> Layer
+        """
+        assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
+        for i in range(len(self._Layers_)):
+            assert (isinstance(self._Layers_[i], BasicLayer)) , '_Layers_[' + str(i) + '] needs to be a Layer'
+    
+    _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
+       
+    def _calc_phase_shift_(self,  q, sinomega):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        phase = 1.0+0.0j
+        for layer in self._Layers_:
+            phase *= layer.get_phase_shift(q, sinomega)
+        return phase
+    
+    def _calc_reflection_(self, q, sinomega):
+        """returns the complex reflection value of the Superlattice.
+             
+           q: wave vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        r = 0.0 + 0.0j        
+        phase = 1.0+0.0j
+        for layer in reversed(self._Layers_):
+            r += layer.get_reflection(q, sinomega)*phase
+            phase *= layer.get_phase_shift(q, sinomega)
+        return r 
+            
+    
+    def _calc_thickness(self):
+        """returns the thickness of the sample."""
+        thickness = 0.0 + 0.0j
+        for layer in self._Layers_:
+            thickness += layer.get_thickness()
+        return thickness
+    
+    def add_Layer(self, layer):
+        """adds the layer to the top of the sample."""
+        assert (isinstance(layer, (Layer, SuperLattice))) , 'layer needs to be a Layer'
+        self._Layers_.append(layer)
+
 #############
 # MixSample #
 #############
@@ -744,7 +820,7 @@ class MixSample(BasicLayer):
     _MixSample__type_check__ = __type_check__ #private copy of the function to avoid overload
     
     def __check_P__(self):
-        """cheks that the probabileties are still right"""
+        """checks that the probabilities are still right"""
         assert (len(self._P_) == len(self._films_)) , 'each film needs a probability'
         if (self._P_):
             assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
@@ -765,7 +841,7 @@ class MixSample(BasicLayer):
     
     def _calc_phase_shift_(self, q, sinomega):
         """returns the phase shift of the layer"""
-        return mc.exp( (self.layers) * self.get_thickness() * 1j * q)
+        return mc.exp(-1J * self.get_thickness() * q[2])
     
     def _calc_thickness_(self):
         """returns the thickness of the film."""
@@ -822,7 +898,7 @@ class ComplexThinFilm(MixSample):
         for i in range(minimum, maximum):
             value = m.exp((i - self._layers_)**2/(-2 * self._width_**2))
             self._P_.append(value)
-            self._films_.append(self.filmType(self._crystal_,i))
+            self._films_.append(self._filmType_(self._crystal_,i))
             summe += value
         for i in range(len(self._P_)):
             self._P_[i] /= summe
@@ -833,8 +909,8 @@ class ComplexThinFilm(MixSample):
 
 class ComplexThinFilmCheck(BasicLayerCheck, ComplexThinFilm):    
     
-    def __init__(self, crystal, layers=1, filmType=ThinFilm):
-        ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
+    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
+        ComplexThinFilm.__init__(self, crystal, layers, width, ThinFilm)
         BasicLayerCheck.__init__(self) 
  
 #######################
@@ -843,8 +919,8 @@ class ComplexThinFilmCheck(BasicLayerCheck, ComplexThinFilm):
 
 class ComplexThinFilmSave(BasicLayerSave, ComplexThinFilm):    
     
-    def __init__(self, crystal, layers=1, filmType=ThinFilm):
-        ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
+    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
+        ComplexThinFilm.__init__(self, crystal, layers, width, ThinFilm)
         BasicLayerSave.__init__(self)   
         
 ################
@@ -929,81 +1005,7 @@ class SuperLattice(object):
         """returns the total thickness of the superlatice"""
         return self.get_Lambda()*self.bilayers
 
-##########
-# Sample #
-##########
 
-class Sample(object):
-        
-    def __init__(self, substrate = None, electrode = None, film = None, layers = None):
-        """initializes the class data and checks data types
-          
-           Substrate: substrate of the Sample 
-           Electrode: Electrode of the Sample
-           Film: Film of the Sample
-           Layers: any number of Layers to add to the sample
-        """
-        
-        self._Layers_ = []
-        if (substrate):
-            self._Layers_.append(substrate)
-        if (electrode):
-            self._Layers_.append(electrode)
-        if (film):
-            self._Layers_.append(film)
-        if (layers):
-            for layer in layers:
-                self._Layers_.append(layer)
-        self._Sample__type_check__()
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           _Layers_ -> list 
-           _Layers_[i] -> Layer
-        """
-        assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
-        for i in range(len(self._Layers_)):
-            assert (isinstance(self._Layers_[i], (Layer, SuperLattice, SuperLatticeComplex, Sample))) , '_Layers_[' + str(i) + '] needs to be a Layer'
-    
-    _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
-       
-    def get_phase_shift(self,  q, sinomega):
-        """returns the phase of the Superlattice.
-
-           q: scattering vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        phase = 1.0+0.0j
-        for layer in self._Layers_:
-            phase *= layer.get_phase_shift(q, sinomega)
-        return phase
-    
-    def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Superlattice.
-             
-           q: wave vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        r = 0.0 + 0.0j        
-        phase = 1.0+0.0j
-        for layer in reversed(self._Layers_):
-            r += layer.get_reflection(q, sinomega)*phase
-            phase *= layer.get_phase_shift(q, sinomega)
-        return r 
-            
-    
-    def get_thickness(self):
-        """returns the thickness of the sample."""
-        thickness = 0.0 + 0.0j
-        for layer in self._Layers_:
-            thickness += layer.get_thickness()
-        return thickness
-    
-    def add_Layer(self, layer):
-        """adds the layer to the top of the sample."""
-        assert (isinstance(layer, (Layer, SuperLattice))) , 'layer needs to be a Layer'
-        self._Layers_.append(layer)
     
 #######################
 # SuperLatticeComplex #
