@@ -402,6 +402,10 @@ class BasicLayer(object):
         """returns the thickness of the Basic Layer"""
         return 1
     
+    def _calc_N_(self):
+        """returns the total number of layers of the Basic layer"""
+        return 1
+    
     def get_reflection(self, q, sinomega):
         """returns the complex reflection value of the Film.
              
@@ -421,6 +425,10 @@ class BasicLayer(object):
     def get_thickness(self):
         """returns the thickness of the film."""
         return self._calc_thickness_()
+    
+    def get_N(self):
+        """returns the total number of layers of the Basic layer"""
+        return self._calc_N()
 
 ###################
 # BasicLayerCheck #
@@ -683,6 +691,10 @@ class ThinFilm(Layer):
     def _calc_thickness_(self):
         """returns the thickness of the film."""
         return (self._layers_ + self.delta)*self.crystal.c
+    
+    def _calc_N_(self):
+        """returns the total number of layers of the Basic layer"""
+        return self._layers_
 
 #################
 # ThinFilmCheck #
@@ -775,6 +787,13 @@ class Sample(BasicLayer):
             thickness += layer.get_thickness()
         return thickness
     
+    def _calc_N_(self):
+        """returns the total number of layers of the Sample"""
+        t = 0
+        for film in self._Layers_:
+            t += film.get_N() 
+        return t
+    
     def add_Layer(self, layer):
         """adds the layer to the top of the sample."""
         assert (isinstance(layer, (Layer, SuperLattice))) , 'layer needs to be a Layer'
@@ -853,6 +872,15 @@ class MixSample(BasicLayer):
             t += film.get_thickness() * self._P_[i]
             i += 1
         return t
+    
+    def _calc_N_(self):
+        """returns the total number of layers of the Basic layer"""
+        t = 0
+        i = 0
+        for film in self._films_:
+            t += film.get_N() * self._P_[i]
+            i += 1
+        return t
 
 ###################
 # ComplexThinFilm #
@@ -924,14 +952,26 @@ class ComplexThinFilmSave(BasicLayerSave, ComplexThinFilm):
     def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
         ComplexThinFilm.__init__(self, crystal, layers, width, ThinFilm)
         BasicLayerSave.__init__(self)   
+
+##############
+# MultiLayer #
+##############
+
+class Multilayer(Sample):
+    
+    def __init__(self, film1 = None, film2 = None, film3 = None, films = None):
+        Sample.__init__(self, substrate=film1, electrode=film2, film=film3, layers=films)
         
+    def get_c(self):
+        return self.get_thickness()/self.get_N()    
+       
 ################
 # SuperLattice #
 ################
 
-class SuperLattice(object):
+class SuperLattice(BasicLayer):
         
-    def __init__(self, film1, film2, bilayers=1):
+    def __init__(self, multilayer, bilayers=1):
         """initializes the class data and checks data types
           
            film1: first film of the superlattice 
@@ -939,61 +979,42 @@ class SuperLattice(object):
            bilayers: number of times both films get repeted
         """
         
-        self.film1 = film1
-        self.film2 = film2
+        self.multilayer = multilayer
         self.bilayers = bilayers
         self._SuperLattice__type_check__()
         
     def __type_check__(self):
         """checks the class data to have the right types
         
-           bilayers -> float 
-           film1 -> Layer
-           film2 -> Layer
+           bilayers -> int 
+           multilayer -> Layer
+
         """
         assert isinstance(self.bilayers, (int)) , 'bilayers needs to be an int'
-        assert isinstance(self.film1, Layer) , 'film1 needs to be a Layer'
-        assert isinstance(self.film2, Layer) , 'film2 needs to be a Layer'
+        assert isinstance(self.multilayer, BasicLayer) , 'multilayer needs to be a BasicLayer'
     
     _SuperLattice__type_check__ = __type_check__ #private copy of the function to avoid overload
        
-    def get_phase_shift(self,  q, sinomega):
+    def _calc_phase_shift_(self,  q, sinomega):
         """returns the phase of the Superlattice.
 
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return ((self.film1.get_phase_shift(q, sinomega) * 
-                self.film2.get_phase_shift(q, sinomega)) ** self.bilayers
-               )
+        return (self.multilayer.get_phase_shift(q, sinomega) ** self.bilayers)
     
-    def get_reflection(self, q, sinomega):
+    def _calc_reflection_(self, q, sinomega):
         """returns the complex reflection value of the Superlattice.
              
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        r1 = self.film1.get_reflection(q, sinomega)
-        r2 = self.film2.get_reflection(q, sinomega)
-        p1 = self.film1.get_phase_shift(q, sinomega)
-        p2 = self.film2.get_phase_shift(q, sinomega)
-        r = 0.0 + 0.0j
+        r = self.multilayer.get_reflection(q, sinomega)
+        p = self.multilayer.get_phase_shift(q, sinomega)
+        reflection = 0.0 + 0.0j
         for i in range(self.bilayers):
-            r += ((r1 * p2 + r2) * ((p1 * p2) ** i))
-        return r
-    
-
-    def get_n(self):
-        """returns the number of layers per bilayer"""
-        if (self.film1._layers_): 
-            l1 = self.film1._layers_
-        else:
-            l1 = 1
-        if (self.film2._layers_): 
-            l2 = self.film2._layers_
-        else:
-            l2 = 1
-        return l1 + l2
+            reflection += ((r) * (p**i))
+        return reflection
     
     def get_c(self):
         """returns the average c lattice parameter"""
@@ -1006,8 +1027,6 @@ class SuperLattice(object):
     def get_thickness(self):
         """returns the total thickness of the superlatice"""
         return self.get_Lambda()*self.bilayers
-
-
     
 #######################
 # SuperLatticeComplex #
