@@ -624,6 +624,10 @@ class ThinFilmSave(LayerSave, ThinFilm):
         ThinFilm.__init__(self, crystal, layers)
         LayerSave.__init__(self, crystal)  
 
+###################
+# ComplexThinFilm #
+###################
+
 class ComplexThinFilm(Layer):
         
     
@@ -689,6 +693,25 @@ class ComplexThinFilm(Layer):
             i += 1
         return 
             
+########################
+# ComplexThinFilmCheck #
+########################
+
+class ComplexThinFilmCheck(LayerCheck, ComplexThinFilm):    
+    
+    def __init__(self, crystal, layers=1, filmType=ThinFilm):
+        ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
+        LayerCheck.__init__(self, crystal) 
+ 
+#######################
+# ComplexThinFilmSave #
+#######################
+
+class ComplexThinFilmSave(LayerSave, ComplexThinFilm, filmType=ThinFilm):    
+    
+    def __init__(self, crystal, layers=1):
+        ComplexThinFilm.__init__(self, crystal, layers, ThinFilm)
+        LayerSave.__init__(self, crystal)   
         
 ################
 # SuperLattice #
