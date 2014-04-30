@@ -969,17 +969,17 @@ class Multilayer(Sample):
 # SuperLattice #
 ################
 
-class SuperLattice(BasicLayer):
+class SuperLattice(Multilayer):
         
-    def __init__(self, multilayer, bilayers=1):
+    def __init__(self, film1 = None, film2 = None, film3 = None, films = None, bilayers=1):
+        
         """initializes the class data and checks data types
           
            film1: first film of the superlattice 
            film2: second film of the superlattice 
            bilayers: number of times both films get repeted
         """
-        
-        self.multilayer = multilayer
+        Sample.__init__(self, substrate=film1, electrode=film2, film=film3, layers=films)
         self.bilayers = bilayers
         self._SuperLattice__type_check__()
         
@@ -987,11 +987,9 @@ class SuperLattice(BasicLayer):
         """checks the class data to have the right types
         
            bilayers -> int 
-           multilayer -> Layer
 
         """
         assert isinstance(self.bilayers, (int)) , 'bilayers needs to be an int'
-        assert isinstance(self.multilayer, BasicLayer) , 'multilayer needs to be a BasicLayer'
     
     _SuperLattice__type_check__ = __type_check__ #private copy of the function to avoid overload
        
@@ -1001,7 +999,7 @@ class SuperLattice(BasicLayer):
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return (self.multilayer.get_phase_shift(q, sinomega) ** self.bilayers)
+        return (Multilayer.get_phase_shift(self, q, sinomega) ** self.bilayers)
     
     def _calc_reflection_(self, q, sinomega):
         """returns the complex reflection value of the Superlattice.
@@ -1009,8 +1007,8 @@ class SuperLattice(BasicLayer):
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        r = self.multilayer.get_reflection(q, sinomega)
-        p = self.multilayer.get_phase_shift(q, sinomega)
+        r = Multilayer.get_reflection(self, q, sinomega)
+        p = Multilayer.get_phase_shift(self, q, sinomega)
         reflection = 0.0 + 0.0j
         phase = 1.0
         for i in range(self.bilayers):
@@ -1032,11 +1030,11 @@ class SuperLattice(BasicLayer):
     
     def get_multilayer_thickness(self):
         """returns the Bilayer thickness of the superlatice"""
-        return self.multilayer.get_thickness()
+        return Multilayer._calc_thickness_(self)
     
     def get_n(self):
         """returns the number of layers per multilayer"""
-        return self.multilayer.get_N()
+        return Multilayer._calc_N_(self)
     
 #######################
 # SuperLatticeComplex #
