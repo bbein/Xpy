@@ -1012,21 +1012,31 @@ class SuperLattice(BasicLayer):
         r = self.multilayer.get_reflection(q, sinomega)
         p = self.multilayer.get_phase_shift(q, sinomega)
         reflection = 0.0 + 0.0j
+        phase = 1.0
         for i in range(self.bilayers):
-            reflection += ((r) * (p**i))
+            reflection += (r * phase)
+            phase *= p
         return reflection
+    
+    def _calc_thickness_(self):
+        """returns the total thickness of the superlatice"""
+        return self.get_multilayer_thickness() *self.bilayers
+    
+    def _calc_N_(self):
+        """returns the total number of layers in the Superlattice"""
+        return self.get_n() * self.bilayers
     
     def get_c(self):
         """returns the average c lattice parameter"""
-        return self.get_Lambda() / self.get_n()
+        return self.get_multilayer_thickness() / self.get_n()
     
-    def get_Lambda(self):
+    def get_multilayer_thickness(self):
         """returns the Bilayer thickness of the superlatice"""
-        return (self.film1.get_thickness() + self.film2.get_thickness())
+        return self.multilayer.get_thickness()
     
-    def get_thickness(self):
-        """returns the total thickness of the superlatice"""
-        return self.get_Lambda()*self.bilayers
+    def get_n(self):
+        """returns the number of layers per multilayer"""
+        return self.multilayer.get_N()
     
 #######################
 # SuperLatticeComplex #
