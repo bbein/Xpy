@@ -999,7 +999,7 @@ class SuperLattice(Multilayer):
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        return (Multilayer.get_phase_shift(self, q, sinomega) ** self.bilayers)
+        return (Multilayer._calc_phase_shift_(self, q, sinomega) ** self.bilayers)
     
     def _calc_reflection_(self, q, sinomega):
         """returns the complex reflection value of the Superlattice.
@@ -1007,8 +1007,8 @@ class SuperLattice(Multilayer):
            q: wave vector
            sinomega: sin(angle between incident beam and sample surface
         """
-        r = Multilayer.get_reflection(self, q, sinomega)
-        p = Multilayer.get_phase_shift(self, q, sinomega)
+        r = Multilayer._calc_reflection_(self, q, sinomega)
+        p = Multilayer._calc_phase_shift_(self, q, sinomega)
         reflection = 0.0 + 0.0j
         phase = 1.0
         for i in range(self.bilayers):
