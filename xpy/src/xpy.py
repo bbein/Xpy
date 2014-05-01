@@ -428,7 +428,7 @@ class BasicLayer(object):
     
     def get_N(self):
         """returns the total number of layers of the Basic layer"""
-        return self._calc_N()
+        return self._calc_N_()
 
 ###################
 # BasicLayerCheck #
@@ -862,7 +862,12 @@ class MixSample(BasicLayer):
     
     def _calc_phase_shift_(self, q, sinomega):
         """returns the phase shift of the layer"""
-        return mc.exp(-1J * self.get_thickness() * q[2])
+        p = 0
+        i = 0
+        for film in self._films_:
+            p += film.get_phase_shift(q, sinomega) * self._P_[i]
+            i += 1
+        return p
     
     def _calc_thickness_(self):
         """returns the thickness of the film."""
@@ -881,6 +886,9 @@ class MixSample(BasicLayer):
             t += film.get_N() * self._P_[i]
             i += 1
         return t
+    
+    def get_c(self):
+        return self._calc_thickness_() / self._calc_N_()
 
 ###################
 # ComplexThinFilm #
