@@ -19,17 +19,19 @@ _NUMBER_ = (int, float) # np is not working in 3.3 yet ,np.floating, np.integer)
 
 class Atom(object):
     
-    def __init__(self, form, pos = None):
+    def __init__(self, form, pos = None , B = 0):
         """initializes the class data and checks data types
           
             pos: 3 element list of relative atom position default: [0.0 ...]  
             struc: Structure Factor of the Atom default: N/A
+            B: is the Debye-Waller factor (Temperature dependent movement)
         """
         if (pos):
             self.pos = pos
         else:
             self.pos = [0.0,0.0,0.0] 
         self.form = form
+        self.B = B
         #check data types
         self._Atom__type_check__()    
         
@@ -41,7 +43,8 @@ class Atom(object):
         """
         
         stri = ("atom: " + self.form.atom + " x=" + str(self.pos[0]) +
-                " y=" + str(self.pos[1]) + " z=" + str(self.pos[2]) 
+                " y=" + str(self.pos[1]) + " z=" + str(self.pos[2]) + 
+                " B=" + str(self.B)
                 )
         return stri
         
@@ -51,11 +54,13 @@ class Atom(object):
             pos    -> list
             pos[i] -> float
             struc  -> StructureFactor
+            B -> number
         """
         assert isinstance(self.form, FormFactor) , 'form needs to be a FormFactor'
         assert (isinstance(self.pos, list) or (len(self.pos) != 3)) , 'a needs to be a list with 3 elements'
         for i in range(len(self.pos)):
             assert (isinstance(self.pos[i], _NUMBER_)) , 'pos' + str(i) + 'needs to be a number'
+        assert (isinstance(self.B , _NUMBER_)) , 'pos' + str(i) + 'needs to be a number'
             
     _Atom__type_check__ = __type_check__ #private copy of the function to avoid overload
 
@@ -80,11 +85,11 @@ class FormFactor(object):
         if (a):
             self.a = a
         else:
-            self.a = [0.0,0.0,0.0,0.0,0.0]
+            self.a = [0.0,0.0,0.0,0.0,0.0,0.0]
         if(b): 
             self.b = b
         else:
-            self.b = [0.0,0.0,0.0,0.0]
+            self.b = [0.0,0.0,0.0,0.0,0.0]
         #load data from path overwrites given data        
         if path:
             self.load_file(path)
@@ -96,8 +101,8 @@ class FormFactor(object):
         
             returns:
             element: 'atom'
-            a1 = 'a[0]; a2 = 'a[1]; a3 = 'a[2]; a4 = 'a[3]; a5 = 'a[4];
-            b1 = 'b[0]; b2 = 'b[1]; b3 = 'b[2]; b4 = 'b[3];
+            a1 = 'a[0]; a2 = 'a[1]; a3 = 'a[2]; a4 = 'a[3]; a5 = 'a[4] a6 = a[5];
+            b1 = 'b[0]; b2 = 'b[1]; b3 = 'b[2]; b4 = 'b[3] b5 = b[4];
         """
         stri = "element:" + self.atom + "\n"
         for i in range(len(self.a)): 
@@ -121,10 +126,10 @@ class FormFactor(object):
         assert isinstance(self.q, _NUMBER_) , 'q needs to be a Number'
         assert isinstance(self.value, _NUMBER_) , 'value needs to be a Number'
         assert isinstance(self.atom, str) , 'atom needs to be a string'
-        assert (isinstance(self.a, list) or (len(self.a) != 5)) , 'a needs to be a list with 5 elements'
+        assert (isinstance(self.a, list) or (len(self.a) != 6)) , 'a needs to be a list with 5 elements'
         for i in range(len(self.a)):
             assert (isinstance(self.a[i], _NUMBER_)) , 'a' + str(i) + 'needs to be a Number'
-        assert (isinstance(self.b, list) or (len(self.b) != 4)) , 'b needs to be a list with 4 elements' 
+        assert (isinstance(self.b, list) or (len(self.b) != 5)) , 'b needs to be a list with 4 elements' 
         for i in range(len(self.b)):
             assert (isinstance(self.b[i], _NUMBER_)) , 'b' + str(i) + 'needs to be a Number'
 
@@ -138,11 +143,12 @@ class FormFactor(object):
         assert isinstance(q,self.q.__class__), 'q needs to be ' + str(self.q.__class__)
         if (self.q != q): 
             q2 = (q*q) / (16*m.pi*m.pi) * 1e-20 
-            self.value =(self.a[0] * m.exp(self.b[0] * q2) + 
-                         self.a[1] * m.exp(self.b[1] * q2) + 
-                         self.a[2] * m.exp(self.b[2] * q2) + 
-                         self.a[3] * m.exp(self.b[3] * q2) + 
-                         self.a[4]
+            self.value =(self.a[0] * m.exp(-self.b[0] * q2) + 
+                         self.a[1] * m.exp(-self.b[1] * q2) + 
+                         self.a[2] * m.exp(-self.b[2] * q2) + 
+                         self.a[3] * m.exp(-self.b[3] * q2) +
+                         self.a[4] * m.exp(-self.b[4] * q2) + 
+                         self.a[5]
                         )
             self.q = q
         return self.value
@@ -160,10 +166,12 @@ class FormFactor(object):
                 elif words[0] == "a3": self.a[2]= float(words[1])
                 elif words[0] == "a4": self.a[3]= float(words[1])
                 elif words[0] == "a5": self.a[4]= float(words[1])
+                elif words[0] == "c": self.a[5]= float(words[1])
                 elif words[0] == "b1": self.b[0]= float(words[1])
                 elif words[0] == "b2": self.b[1]= float(words[1])
                 elif words[0] == "b3": self.b[2]= float(words[1])
                 elif words[0] == "b4": self.b[3]= float(words[1])
+                elif words[0] == "b5": self.b[4]= float(words[1])
             line = f.readline()
         f.close()
 
