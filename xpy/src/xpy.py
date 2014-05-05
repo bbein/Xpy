@@ -19,12 +19,13 @@ _NUMBER_ = (int, float) # np is not working in 3.3 yet ,np.floating, np.integer)
 
 class Atom(object):
     
-    def __init__(self, form, pos = None , B = 0):
+    def __init__(self, form, pos = None , N = 1, B = 0):
         """initializes the class data and checks data types
           
             pos: 3 element list of relative atom position default: [0.0 ...]  
             struc: Structure Factor of the Atom default: N/A
             B: is the Debye-Waller factor (Temperature dependent movement)
+            N: probability that the atom is present in the a unit cell
         """
         if (pos):
             self.pos = pos
@@ -32,6 +33,7 @@ class Atom(object):
             self.pos = [0.0,0.0,0.0] 
         self.form = form
         self.B = B
+        self.N = N
         #check data types
         self._Atom__type_check__()    
         
@@ -44,7 +46,7 @@ class Atom(object):
         
         stri = ("atom: " + self.form.atom + " x=" + str(self.pos[0]) +
                 " y=" + str(self.pos[1]) + " z=" + str(self.pos[2]) + 
-                " B=" + str(self.B)
+                " B=" + str(self.B) + " N=" + str(self.N)
                 )
         return stri
         
@@ -52,15 +54,17 @@ class Atom(object):
         """checks the class data to have the right types
         
             pos    -> list
-            pos[i] -> float
+            pos[i] -> Number
             struc  -> StructureFactor
-            B -> number
+            B -> Number
+            N -> Number
         """
         assert isinstance(self.form, FormFactor) , 'form needs to be a FormFactor'
         assert (isinstance(self.pos, list) or (len(self.pos) != 3)) , 'a needs to be a list with 3 elements'
         for i in range(len(self.pos)):
             assert (isinstance(self.pos[i], _NUMBER_)) , 'pos' + str(i) + 'needs to be a number'
-        assert (isinstance(self.B , _NUMBER_)) , 'pos' + str(i) + 'needs to be a number'
+        assert (isinstance(self.B , _NUMBER_)) , 'B' + str(i) + 'needs to be a number'
+        assert (isinstance(self.N , _NUMBER_)) , 'N' + str(i) + 'needs to be a number'
             
     _Atom__type_check__ = __type_check__ #private copy of the function to avoid overload
 
@@ -250,10 +254,18 @@ class CrystalStructure(object):
         pos = [0.0,0.0,0.0];
         line = usedfile.readline()
         count = 0
+        B = 0
+        N = 1
         while (line):
             words = line.split()
             if words:
-                if words[0]   == "x": 
+                if words[0] == "B":
+                    global B 
+                    B = float(words[1])
+                elif words[0] == "N":
+                    global N 
+                    N = float(words[1])
+                elif words[0]   == "x": 
                     pos[0] = float(words[1])
                     count += 1
                 elif words[0] == "y": 
@@ -264,7 +276,7 @@ class CrystalStructure(object):
                     count += 1
                 if (count == 3): break 
             line = usedfile.readline()
-        newatom = Atom(form, pos)
+        newatom = Atom(form, pos, N, B)
         self.add_atom(newatom)    
 
     def add_atom(self, atom):
@@ -300,6 +312,8 @@ class CrystalStructure(object):
         f.write('c ' + str(self._lattice_parameters_[2]) + '\n')
         for atom in self.atoms:
             f.write('element ' + str(atom.form.atom) + '\n')
+            f.write('B ' + str(atom.B) + '\n')
+            f.write('N ' + str(atom.N) + '\n')
             f.write('x ' + str(atom.pos[0]) + '\n')
             f.write('y ' + str(atom.pos[1]) + '\n')
             f.write('z ' + str(atom.pos[2]) + '\n')
@@ -319,7 +333,8 @@ class CrystalStructure(object):
             multi = 0.0
             for i in range(len(q)):
                 multi += (1 - atom.pos[i])*self._lattice_parameters_[i]*q[i] 
-            structure_factor +=(atom.form.get_value(mq) *
+            structure_factor +=(atom.form.get_value(mq) * atom.N *
+                                 mc.exp(-atom.B*mq*mq/16/m.pi/m.pi) *
                                  mc.exp(-1.0j * multi - 
                                         (self.damping / sinomega *
                                          self._lattice_parameters_[2] * 
