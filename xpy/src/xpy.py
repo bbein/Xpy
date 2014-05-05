@@ -311,7 +311,7 @@ class CrystalStructure(object):
             multi = 0.0
             for i in range(len(q)):
                 multi += (1 - atom.pos[i])*self._lattice_parameters_[i]*q[i] 
-            structure_factor +=(atom.form.get_value(mq) * 
+            structure_factor +=(atom.form.get_value(mq) *
                                  mc.exp(-1.0j * multi - 
                                         (self.damping / sinomega *
                                          self._lattice_parameters_[2] * 
@@ -576,8 +576,8 @@ class Layer(BasicLayer):
         a = self.crystal.a
         b = self.crystal.b
         R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
-        amp1d = 4 * m.pi * R / m.sqrt(sum([x**2 for x in q])) / a / b
-        return (1j*(amp1d) * (1 - mc.exp(self._icq_.real))**2)
+        amp1d = 4 * m.pi * R / a / b #/ m.sqrt(sum([x**2 for x in q]))
+        return (1 * amp1d * (1-mc.exp(self._icq_.real))**2)
     
     def _calc_reflection_(self, q, sinomega):
         """calculates the complex reflection value of the Film."""
@@ -630,7 +630,7 @@ class ThickFilm (Layer):
         """calculates the complex reflection value of the Thick Film."""
         r = Layer._calc_reflection_(self, q, sinomega)
         r *= 1 / (1 - mc.exp(self._icq_))
-        r = 2 * r / (1 + m.sqrt(1 + 4 * abs(r**2)))
+        #r = 2 * r / (1 + m.sqrt(1 + 4 * abs(r**2)))
         return r
 
 ##################
@@ -659,7 +659,7 @@ class ThinFilm(Layer):
            crystal: SimpleCrystalStructure of the film
            layers:  number of layers in the film
         """
-        super(ThinFilm, self).__init__(crystal)
+        super(self.__class__, self).__init__(crystal)
         self._layers_ = layers
         self._icnq_ = 0.0+0.0j   
         self._ThinFilm__type_check__()
@@ -931,7 +931,7 @@ class ComplexThinFilm(MixSample):
         self._P_ = []
         self._films_ = []
         minimum = int(self._layers_ - 3 * self._width_) #int always rounds down
-        maximum = int(round(self._layers_ + 3 * self._width_ + 0.5)) #+0.5 to round up
+        maximum = int(round(self._layers_ + 3 * self._width_ + 1.5)) #+0.5 to round up +1 for the range
         summe = 0
         for i in range(minimum, maximum):
             value = m.exp((i - self._layers_)**2/(-2 * self._width_**2))
@@ -940,6 +940,18 @@ class ComplexThinFilm(MixSample):
             summe += value
         for i in range(len(self._P_)):
             self._P_[i] /= summe
+            
+    def _init_P_perfect(self):
+        """initializes the probabilities for different Thicknesses"""
+        self._P_ = []
+        self._films_ = []
+        p2 = self._layers_ - int(self._layers_) #probabilety for second film
+        p1 = 1-p2
+        self._P_.append(p1)
+        self._films_.append(self._filmType_(self._crystal_,int(self._layers_)))
+        self._P_.append(p2)
+        self._films_.append(self._filmType_(self._crystal_,int(self._layers_)+1))
+
             
 ########################
 # ComplexThinFilmCheck #
@@ -1159,7 +1171,7 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
     for i in range(int(steps_l)):
         l=l_min+i*l_step
         q[2] = l*2*m.pi/base_struc.c
-        absq = sum([x**2 for x in q])
+        absq = m.sqrt(sum([x**2 for x in q]))
         if (sinomegain == 0):
             sinomega = absq * wavelength / 4 / m.pi
         else:
@@ -1168,6 +1180,7 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
         lin *= lin
         lin *= direct
         lin += background
+        #lin *= 1/m.sin(2*m.asin(sinomega))*(1+m.cos(2*m.asin(sinomega))**2)/2/sinomega
         scan.append([h, k, l, lin])
     
     return scan
