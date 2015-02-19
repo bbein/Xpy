@@ -4,7 +4,7 @@ h_step 0.001
 
 l_min 0.8
 l_max 1.05
-l_step 0.001
+l_step 0.000005
 
 lambda 1.5409E-10
 direct 1e16

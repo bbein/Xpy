@@ -75,7 +75,7 @@ class Atom(object):
 
 class FormFactor(object): 
     
-    def __init__(self,atom="",a=None,b=None,q=0.0,value=0.0,path=None):
+    def __init__(self,atom="",a=None,b=None, i=1.0,q=0.0,value=0.0,path=None):
         """initializes the class data and checks data types
         
             atom:  chemical Symbol                   default: ""
@@ -87,6 +87,7 @@ class FormFactor(object):
         self.q = q
         self.value = value
         self.atom = atom
+        self.i = i
         if (a):
             self.a = a
         else:
@@ -115,6 +116,7 @@ class FormFactor(object):
         stri += "\n"
         for i in range(len(self.b)): 
             stri += 'b' + str(i+1) + " = " + str(self.b[i]) + "; "
+        stri += "\n i: " + str(self.i)
         return stri
         
     def __type_check__(self):
@@ -127,6 +129,7 @@ class FormFactor(object):
             a[i] -> float
             b -> list
             b[i] -> float
+            i -> float
         """
         assert isinstance(self.q, _NUMBER_) , 'q needs to be a Number'
         assert isinstance(self.value, _NUMBER_) , 'value needs to be a Number'
@@ -137,6 +140,7 @@ class FormFactor(object):
         assert (isinstance(self.b, list) or (len(self.b) != 5)) , 'b needs to be a list with 4 elements' 
         for i in range(len(self.b)):
             assert (isinstance(self.b[i], _NUMBER_)) , 'b' + str(i) + 'needs to be a Number'
+        assert isinstance(self.i, _NUMBER_) , 'q needs to be a Number'
 
     _FormFactor__type_check__ = __type_check__ #private copy of the function to avoid overload
     
@@ -145,14 +149,14 @@ class FormFactor(object):
         
            input q: absolute value of the wave vector^2 /16/m.pi/m.pi*10**-20     
         """
-        assert isinstance(q,self.q.__class__), 'q needs to be ' + str(self.q.__class__)
+        #assert isinstance(q,self.q.__class__), 'q needs to be ' + str(self.q.__class__)
         if (self.q != q): 
             self.value =(self.a[0] * m.exp(-self.b[0] * q) + 
                          self.a[1] * m.exp(-self.b[1] * q) + 
                          self.a[2] * m.exp(-self.b[2] * q) + 
                          self.a[3] * m.exp(-self.b[3] * q) +
                          self.a[4] * m.exp(-self.b[4] * q) + 
-                         self.a[5]
+                         self.a[5] + 1j * self.i
                         )
             self.q = q
         return self.value
@@ -176,6 +180,7 @@ class FormFactor(object):
                 elif words[0] == "b3": self.b[2]= float(words[1])
                 elif words[0] == "b4": self.b[3]= float(words[1])
                 elif words[0] == "b5": self.b[4]= float(words[1])
+                elif words[0] == "i": self.i = float(words[1])
             line = f.readline()
         f.close()
 
@@ -336,7 +341,7 @@ class CrystalStructure(object):
             for i in range(3):
                 multi += -1j * (1 - atom.pos[i]) * self._lattice_parameters_[i] * q[i] 
             structure_factor +=(atom.form.get_value(q2) * atom.N *
-                                mc.exp(-atom.B * q2  + multi - damp * (1 - atom.pos[2]))     
+                                mc.exp(-atom.B * q2 + multi - damp * (1 - atom.pos[2]))     
                                )
         return structure_factor
                   
@@ -394,12 +399,66 @@ class CrystalStructureCheck(CrystalStructure):
             self._sinomega_ = sinomega
         return self._structure_factor_
 
+########
+# Cell #
+########
+
+class Cell(object):
+    
+    def get_reflection(self, q, sinomega):
+        """returns the complex reflection value of the UnitCell.
+             
+           q: wave vector
+           sinomega: sin(angle between incident beam and sample surface
+        """
+        return self._calc_reflection_(q, sinomega)
+    
+    def get_phase_shift(self, q, sinomega):
+        """returns the phase of the UnitCell.
+
+           q: scattering vector
+           sinomega: sin angle between surface plane and incedent beam 
+        """
+        return self._calc_phase_shift_(q, sinomega)
+    
+    def get_width(self):
+        """returns the width of the UnitCell."""
+        return self._calc_width_()
+    
+    def get_depth(self):
+        """returns the depth of the UnitCell"""
+        return self._calc_depth_()
+    
+    def get_thickness(self):
+        """returns the thickness of the UnitCell."""
+        return self._calc_thickness_() 
+    
+    @property
+    def a(self):
+        """a lattice parameter"""
+        return self.get_width()
+        
+    @property
+    def b(self):
+        """b lattice parameter"""
+        return self.get_depth()
+        
+    @property
+    def c(self):
+        """c lattice parameter"""
+        return self.get_thickness()
+    
+    @property
+    def damping(self):
+        """c lattice parameter"""
+        return self._calc_damping_()
+
 
 ############
 # UnitCell #
 ############
 
-class UnitCell(object):
+class UnitCell(Cell):
     
     def __init__(self, crystal):
         """initializes the class data and checks data types
@@ -407,8 +466,8 @@ class UnitCell(object):
            crystal: CrystalStructure of the film  
         """
         self.crystal= crystal
-        self._icq_ = self._bq_ = self._aq_ = 0.0
-        self._eicq_ = 0.0
+        self._icq_ = self._ibq_ = self._iaq_ = 0.0
+        self._eiaq_ = self._eibq_ = self._eicq_ = 0.0
         self._damping_ = 0.0
         self._amp_ =  self._calc_amplitude_()
     
@@ -432,7 +491,7 @@ class UnitCell(object):
     def _calc_amplitude_(self):
         """returns calculates the scattering amplitude"""
         R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
-        amp1d = 4 * m.pi * R / self.crystal.a / self.crystal.b 
+        amp1d = 4 * m.pi * R / self.a / self.b 
         return amp1d 
     
     def _calc_reflection_(self, q, sinomega):
@@ -451,12 +510,16 @@ class UnitCell(object):
                 self._eibq_, 
                 self._eicq_ * self._damping_
                ]
+    
+    def _calc_damping_(self):
+        """returns the damping factor of one unitCell of the underlying cristal"""
+        return self.crystal.damping
      
     def _calc_width_(self):
         """returns the width of the UnitCell"""
         return self.crystal.a
     
-    def _calc_breath_(self):
+    def _calc_depth_(self):
         """returns the breath of the UnitCell"""
         return self.crystal.b
     
@@ -466,42 +529,14 @@ class UnitCell(object):
     
     def _set_icq_(self,  q, sinomega):
         """recalculates the values for i*(latticeparameters*q*n)"""
-        factor = self.crystal.damping * self.crystal.c / sinomega
+        factor = self.damping * self.crystal.c / sinomega
         self._iaq_ = -1J * self.crystal.a * q[0]
         self._ibq_ = -1J * self.crystal.b * q[1] 
         self._icq_ = -1J * self.crystal.c * q[2]
         self._eiaq_ = mc.exp(self._iaq_)
         self._eibq_ = mc.exp(self._ibq_)
         self._eicq_ = mc.exp(self._icq_)
-        self._damping_ = mc.exp(-factor)
-    
-    def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the UnitCell.
-             
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        return self._calc_reflection_(q, sinomega)
-    
-    def get_phase_shift(self, q, sinomega):
-        """returns the phase of the UnitCell.
-
-           q: scattering vector
-           sinomega: sin angle between surface plane and incedent beam 
-        """
-        return self._calc_phase_shift_(q, sinomega)
-    
-    def get_width(self):
-        """returns the width of the UnitCell."""
-        return self._calc_width_()
-    
-    def get_breath(self):
-        """returns the breath of the UnitCell."""
-        return self._calc_breath_()
-    
-    def get_thickness(self):
-        """returns the thickness of the UnitCell."""
-        return self._calc_thickness_()               
+        self._damping_ = m.exp(-factor)
         
 #############
 # SuperCell #
@@ -515,12 +550,13 @@ class SuperCell(UnitCell):
            crystal: SimpleCrystalStructure of the film
            layers:  number of layers in the film
         """
-        super(self.__class__, self).__init__(crystal)
+        
         self._high_ = high
         self._deep_ = deep
         self._wide_ = wide
-        self.eps = 0.00001   
-        self._ThinFilm__type_check__()
+        super(self.__class__, self).__init__(crystal)
+        self.eps = 0.01   
+        self._SuperCell__type_check__()
         
     def __type_check__(self):
         """checks the class data to have the right types
@@ -533,19 +569,18 @@ class SuperCell(UnitCell):
         assert isinstance(self._deep_, (int)) , 'deep needs to be a int'
         assert isinstance(self._wide_, (int)) , 'wide needs to be a int'
         
-    _ThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
+    _SuperCell__type_check__ = __type_check__ #private copy of the function to avoid overload
     
     def _calc_direction_(self, eiaq, wide):
         if wide == 0:
             if (eiaq.real > 1 - self.eps):
                 return 1.0
             return 0.0
-        else:
-            return self._calc_out_direction(eiaq, wide, 0.9999999999)
+        return self._calc_out_direction(eiaq, wide, 0.9999999999)
     
     def _calc_out_direction(self, eiaq, wide, damping):
         if wide == 0:
-            return 1 / (1 - eiaq * damping)
+            return (1 - damping) / (1 - eiaq * damping)
         return (1 - (eiaq * damping) ** wide) / (1 - eiaq * damping)
     
     def _calc_reflection_(self, q, sinomega):
@@ -566,17 +601,478 @@ class SuperCell(UnitCell):
                ]
     
     def _calc_thickness_(self):
-        """returns the thickness of the film."""
-        return self._high_ * self.crystal.c
+        """returns the thickness of the UnitCell."""
+        if self._high_ == 0:
+            return 1
+        else:
+            return self._high_ * self.crystal.c
     
-    def _calc_breath_(self):
-        """returns the breath of the UnitCell"""
-        return self.crystal.b * self._deep_ 
+    def _calc_depth_(self):
+        """returns the depth of the UnitCell"""
+        if self._deep_ == 0:
+            return 1
+        else:
+            return self.crystal.b * self._deep_ 
     
     def _calc_width_(self):
         """returns the thickness of the UnitCell"""
-        return self.crystal.a * self._wide_
+        if self._wide_ == 0:
+            return 1
+        else:
+            return self.crystal.a * self._wide_
 
+########
+# Film #
+########
+
+class Film(Cell):
+    
+    def __init__(self, cell, wide=0, deep=0, high=0, sigma = 0):
+        """initializes the class data and checks data types
+          
+           crystal: SimpleCrystalStructure of the film
+           layers:  number of layers in the film
+        """
+        self._cell_ = cell
+        self._high_ = high
+        self._deep_ = deep
+        self._wide_ = wide
+        self.eps = 0.0007*2*m.pi   
+        self._Film__type_check__()
+        self._sigma_ = sigma
+        self._init_peaks_()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           cell -> Cell
+           wide -> int
+           deep -> int
+           high -> int 
+        """
+        assert isinstance(self._cell_, (Cell)) , '_cell_ needs to be a Cell'
+        assert isinstance(self._high_, (int)) , 'high needs to be a int'
+        assert isinstance(self._deep_, (int)) , 'deep needs to be a int'
+        assert isinstance(self._wide_, (int)) , 'wide needs to be a int'
+        
+    _Film__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def _set_icq_(self,  q, sinomega):
+        """recalculates the values for i*(latticeparameters*q*n)"""
+        factor = self.damping * self._cell_.c / sinomega
+        self._iaq_ = -1J * self._cell_.a * q[0]
+        self._ibq_ = -1J * self._cell_.b * q[1] 
+        self._icq_ = -1J * self._cell_.c * q[2]
+        self._eiaq_ = mc.exp(self._iaq_)
+        self._eibq_ = mc.exp(self._ibq_)
+        self._eicq_ = mc.exp(self._icq_)
+        self._damping_ = m.exp(-factor)
+    
+    def _calc_direction_(self, eiaq, wide):
+        #if wide == 0:
+        if (eiaq.real > 1 - self.eps):
+            return 1.0
+            #return 0.0
+        return self._calc_out_direction(eiaq, wide, 0.9999999999)
+    
+    def _calc_out_direction(self, eiaq, wide, damping):
+        if wide == 0:
+            return (1) / (1 - eiaq * damping)
+        return (1 - (eiaq * damping) ** wide) / (1 - eiaq * damping)
+    
+    def _init_peaks_(self):
+        self._q001_ = 2*m.pi/self._cell_.c
+        self._I001_ = 1.0
+        self._I002_ = 10.0
+        
+    def _roughness_(self, q):
+        """Calculates a surface roughness gausian term"""
+        if (self._sigma_ == 0.0): return 1.0
+        #self._init_peaks_()
+        return m.exp(-self._sigma_* (q[2] - self._q001_)**2)
+    
+    
+    def _calc_reflection_(self, q, sinomega):
+        """calculates the reflection and phase shift of the Film."""
+        r = self._cell_._calc_reflection_(q, sinomega)
+        self._set_icq_(q, sinomega)
+        r *= (self._calc_direction_(self._eiaq_ , self._wide_) * 
+              self._calc_direction_(self._eibq_ , self._deep_) *
+              self._calc_out_direction(self._eicq_ , self._high_, self._damping_) *
+              self._roughness_(q)
+             )
+        return r
+
+    def _calc_damping_(self):
+        """returns the damping factor of one unitCell of the underlying crystal"""
+        return self._cell_.damping
+
+    def _calc_phase_shift_(self, q, sinomega):
+        """returns the phase shift of the Film"""
+        return [self._eiaq_ ** self._wide_,
+                self._eibq_ ** self._deep_, 
+                (self._eicq_ * self._damping_) ** self._high_
+               ]
+    
+    def _calc_thickness_(self):
+        """returns the thickness of the UnitCell."""
+        if self._high_ == 0:
+            return 1
+        else:
+            return self._high_ * self._cell_.c
+    
+    def _calc_depth_(self):
+        """returns the depth of the UnitCell"""
+        if self._deep_ == 0:
+            return 1
+        else:
+            return self._cell_.b * self._deep_ 
+    
+    def _calc_width_(self):
+        """returns the thickness of the UnitCell"""
+        if self._wide_ == 0:
+            return 1
+        else:
+            return self._cell_.a * self._wide_        
+
+#############
+# Substrate #
+#############
+
+class Substrate(Film):
+
+    def _calc_reflection_(self, q, sinomega):
+        """calculates the reflection and phase shift of the Film."""
+        r = self._cell_._calc_reflection_(q, sinomega)
+        self._set_icq_(q, sinomega)
+        r *= (self._calc_direction_(self._eiaq_ , self._wide_) * 
+              self._calc_direction_(self._eibq_ , self._deep_) *
+              (1) / ((self._q001_ - q[2])) *
+              self._roughness_(q)
+             )
+        return r
+##########
+# Sample #
+##########
+
+class Sample(Cell):
+        
+    def __init__(self, films = None):
+        """initializes the class data and checks data types
+          
+           Substrate: substrate of the Sample 
+           Electrode: Electrode of the Sample
+           Film: Film of the Sample
+           Layers: any number of Layers to add to the sample
+        """
+        
+        self._films_ = []
+        if (films):
+            for layer in films:
+                self._films_.append(layer)
+        self._Sample__type_check__()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           _Layers_ -> list 
+           _Layers_[i] -> Layer
+        """
+        assert isinstance(self._films_, list) , '_Layers_ needs to be an list'
+        for i in range(len(self._films_)):
+            assert (isinstance(self._films_[i], Cell)) , '_films_[' + str(i) + '] needs to be a Cell'
+    
+    _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
+       
+    def _calc_phase_shift_(self,  q, sinomega):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        return [mc.exp(-1J * self.get_width() * q[0]), 
+                mc.exp(-1J * self.get_depth() * q[1]), 
+                mc.exp(-1J * self.get_thickness() * q[2]),
+                ]
+    
+    def _phase_(self, film, q , sinomega):
+        """returns the phaseshift of the film in the direction films are connected"""
+        return 0
+    
+    def _calc_damping_(self):
+        """returns the damping factor of one unitCell of the underlying cristal"""
+        damping = 0
+        for film in self._films_:
+            damping += film.damping
+        damping /= len(self._films_)
+        return damping
+    
+    def _calc_reflection_(self, q, sinomega):
+        """returns the complex reflection value of the Superlattice.
+             
+           q: wave vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        r = 0.0 + 0.0j        
+        phase = 1.0+0.0j
+        for layer in reversed(self._films_):
+            r += layer.get_reflection(q, sinomega) * phase
+            phase *= self._phase_(layer, q, sinomega)
+        return r 
+    
+    def _calc_width_(self):
+        """returns the width of the Sample."""
+        thickness = 0.0
+        for layer in self._films_:
+            thickness += layer.get_width()
+        thickness /= len(self._films_)
+        return thickness
+    
+    def _calc_depth_(self):
+        """returns the width of the Sample."""
+        thickness = 0.0
+        for layer in self._films_:
+            thickness += layer.get_depth()
+        thickness /= len(self._films_)
+        return thickness
+             
+    
+    def _calc_thickness_(self):
+        """returns the thickness of the Sample."""
+        thickness = 0.0
+        for layer in self._films_:
+            thickness += layer.get_thickness()
+        thickness /= len(self._films_)
+        return thickness
+    
+    def add_Layer(self, film):
+        """adds the film to the top of the sample."""
+        assert (isinstance(film, Cell)) , 'layer needs to be a Layer'
+        self._films_.append(film)
+
+#############
+# MixSample #
+#############
+
+class MixSample(Sample):
+    
+    def __init__(self, films = None, probabileties = None):
+        """initializes the class data and checks data types
+          
+           films: different films in the Sample
+           probabileties: which part is made of which film
+        """
+        Sample.__init__(self,films)
+        self._P_ = []
+        if (probabileties):
+            for p in probabileties:
+                self._P_.append(p)
+        self._MixSample__type_check__()
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           _P_ -> list 
+           _P_[i] -> number
+        """
+        assert isinstance(self._P_, list) , '_P_ needs to be an list'
+        for i in range(len(self._P_)):
+            assert (isinstance(self._P_[i], _NUMBER_)) , '_P_[' + str(i) + '] needs to be a Number'
+        self.__check_P__()
+    
+    _MixSample__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def __check_P__(self):
+        """checks that the probabilities are still right"""
+        eps = 0.0001
+        assert (len(self._P_) == len(self._films_)) , 'each film needs a probability'
+        if (self._P_):
+            if (sum(self._P_) > 1.0+eps or sum(self._P_) < 1.0-eps):
+                assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
+    
+    def _calc_reflection_(self, q, sinomega):
+        """returns the complex reflection value of the Sample.
+             
+           q: wave vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        self.__check_P__()
+        r = 0.0 + 0.0j
+        i = 0        
+        for layer in self._films_:
+            r += layer.get_reflection(q, sinomega) * self._P_[i]
+            i += 1
+        return r
+    
+    def _calc_phase_shift_(self,  q, sinomega):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        phase = [0.0,0.0,0.0]
+        i = 0
+        for layer in self._films_:
+            for j in range(3):  
+                phase[j] += layer.get_phase_shift(q, sinomega)[j] * self._P_[i]
+            i += 1
+        return phase
+    
+    def _calc_width_(self):
+        """returns the width of the Sample."""
+        thickness = 0.0
+        i = 0
+        for layer in self._films_:
+            thickness += layer.get_width() * self._P_[i]
+            i += 1
+        return thickness
+    
+    def _calc_depth_(self):
+        """returns the width of the Sample."""
+        thickness = 0.0
+        i = 0
+        for layer in self._films_:
+            thickness += layer.get_depth() * self._P_[i]
+            i += 1
+        return thickness
+    
+    def _calc_thickness_(self):
+        """returns the thickness of the Sample."""
+        t = 0
+        i = 0
+        for film in self._films_:
+            t += film.get_thickness() * self._P_[i]
+            i += 1
+        return t  
+    
+##############
+# SampleWide #
+##############
+
+class WideSample(Sample):
+    
+    def __init__(self, films = None):
+        """initializes the class data and checks data types
+          
+           films: different films in the Sample
+           probabileties: which part is made of which film
+           widths: width of each film
+        """
+        super(self.__class__, self).__init__(films)
+        
+    def _phase_(self, film, q, sinomega):
+        """returns the phaseshift of the film in the direction films are connected"""
+        return film.get_phase_shift(q, sinomega)[0] 
+    
+    def _calc_width_(self):
+        """returns the width of the Sample."""
+        thickness = 0.0
+        for layer in self._films_:
+            thickness += layer.get_width()
+        return thickness
+    
+###############
+# ThickSample #
+###############
+
+class ThickSample(Sample):
+    
+    def __init__(self, films = None):
+        """initializes the class data and checks data types
+          
+           films: different films in the Sample
+           probabileties: which part is made of which film
+           widths: width of each film
+        """
+        super(self.__class__, self).__init__(films)
+        
+    def _phase_(self, film, q, sinomega):
+        """returns the phaseshift of the film in the direction films are connected"""
+        return film.get_phase_shift(q, sinomega)[2]
+
+    def _calc_thickness_(self):
+        """returns the thickness of the Sample."""
+        thickness = 0.0
+        for layer in self._films_:
+            thickness += layer.get_thickness()
+        return thickness   
+    
+    def _calc_phase_shift_(self,  q, sinomega):
+        """returns the phase of the Superlattice.
+
+           q: scattering vector
+           sinomega: sin of angle between surface and incedent beam
+        """
+        p3 = 1
+        for layer in self._films_:
+            p3 *= layer.get_phase_shift(q,sinomega)[2]
+        return [mc.exp(-1J * self.get_width() * q[0]), 
+                mc.exp(-1J * self.get_depth() * q[1]), 
+                p3,
+                ]
+ 
+###################
+# ComplexThikFilm #
+###################
+
+class ComplexThikFilm(MixSample):
+    
+    def __init__(self, cell, layers=1.0, width = 0.01, filmtype = Film):
+        """initializes the class data and checks data types
+          
+           crystal: SimpleCrystalStructure of the film
+           layers:  number of layers in the film
+           width: width of the gausian distribution around layers
+           filmType: the used filmtype to calculate the thinfilms
+        """
+        MixSample.__init__(self)
+        self._cell_ = cell
+        self._layers_ = layers
+        self._width_ = width  
+        self._filmType_ = filmtype
+        self._ComplexThinFilm__type_check__()
+        self._init_P_()        
+        
+    def __type_check__(self):
+        """checks the class data to have the right types
+        
+           layers -> number
+           width -> number 
+        """
+        assert isinstance(self._layers_, _NUMBER_) , 'layers needs to be a Number'
+        assert isinstance(self._width_, _NUMBER_) , 'width needs to be a Number'
+        assert isinstance(self._cell_, Cell) , 'cell needs to be a Cell'
+        #assert isinstance(self.filmType, (ThinFilm)) , 'filmType needs to be a ThinFilm'
+        
+    _ComplexThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
+    
+    def _init_P_(self):
+        """initializes the probabilities for different Thicknesses"""
+        self._P_ = []
+        self._films_ = []
+        minimum = int(self._layers_ - 3 * self._width_) #int always rounds down
+        maximum = int(round(self._layers_ + 3 * self._width_ + 1.5)) #+0.5 to round up +1 for the range
+        summe = 0
+        for i in range(minimum, maximum):
+            value = m.exp((i - self._layers_)**2/(-2 * self._width_**2))
+            self._P_.append(value)
+            self._films_.append(self._filmType_(self._cell_,0,0,i))
+            summe += value
+        for i in range(len(self._P_)):
+            self._P_[i] /= summe
+            
+    def _init_P_perfect(self):
+        """initializes the probabilities for different Thicknesses"""
+        self._P_ = []
+        self._films_ = []
+        p2 = self._layers_ - int(self._layers_) #probabilety for second film
+        p1 = 1-p2
+        self._P_.append(p1)
+        self._films_.append(Film(self._cell_,int(self._layers_)))
+        self._P_.append(p2)
+        self._films_.append(self._filmType_(self._cell_,int(self._layers_)+1))
+ 
+    
 ##############
 # BasicLayer #
 ##############
@@ -947,322 +1443,7 @@ class ThinFilmSave(LayerSave, ThinFilm):
     
     def __init__(self, crystal, layers=1, breath=0, width=0):
         ThinFilm.__init__(self, crystal, layers, breath, width)
-        LayerSave.__init__(self, crystal)  
-
-##########
-# Sample #
-##########
-
-class Sample(BasicLayer):
-        
-    def __init__(self, substrate = None, electrode = None, film = None, layers = None):
-        """initializes the class data and checks data types
-          
-           Substrate: substrate of the Sample 
-           Electrode: Electrode of the Sample
-           Film: Film of the Sample
-           Layers: any number of Layers to add to the sample
-        """
-        
-        self._Layers_ = []
-        if (substrate):
-            self._Layers_.append(substrate)
-        if (electrode):
-            self._Layers_.append(electrode)
-        if (film):
-            self._Layers_.append(film)
-        if (layers):
-            for layer in layers:
-                self._Layers_.append(layer)
-        self._Sample__type_check__()
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           _Layers_ -> list 
-           _Layers_[i] -> Layer
-        """
-        assert isinstance(self._Layers_, list) , '_Layers_ needs to be an list'
-        for i in range(len(self._Layers_)):
-            assert (isinstance(self._Layers_[i], BasicLayer)) , '_Layers_[' + str(i) + '] needs to be a Layer'
-    
-    _Sample__type_check__ = __type_check__ #private copy of the function to avoid overload
-       
-    def _calc_phase_shift_(self,  q, sinomega):
-        """returns the phase of the Superlattice.
-
-           q: scattering vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        phase = 1.0+0.0j
-        for layer in self._Layers_:
-            phase *= layer.get_phase_shift(q, sinomega)[2]
-        return [1, 1, phase]
-    
-    def _calc_reflection_(self, q, sinomega):
-        """returns the complex reflection value of the Superlattice.
-             
-           q: wave vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        r = 0.0 + 0.0j        
-        phase = 1.0+0.0j
-        for layer in reversed(self._Layers_):
-            r += layer.get_reflection(q, sinomega)*phase
-            phase *= layer.get_phase_shift(q, sinomega)[2]
-        return r 
-            
-    
-    def _calc_thickness_(self):
-        """returns the thickness of the sample."""
-        thickness = 0.0 + 0.0j
-        for layer in self._Layers_:
-            thickness += layer.get_thickness()
-        return thickness
-    
-    def _calc_N_(self):
-        """returns the total number of layers of the Sample"""
-        t = 0
-        for film in self._Layers_:
-            t += film.get_N() 
-        return t
-    
-    def add_Layer(self, layer):
-        """adds the layer to the top of the sample."""
-        assert (isinstance(layer, BasicLayer)) , 'layer needs to be a Layer'
-        self._Layers_.append(layer)
-
-#############
-# MixSample #
-#############
-
-class MixSample(BasicLayer):
-    
-    def __init__(self, films = None, probabileties = None):
-        """initializes the class data and checks data types
-          
-           films: different films in the Sample
-           probabileties: which part is made of which film
-        """
-        self._films_ = []
-        self._P_ = []
-        if (films):
-            for layer in films:
-                self._films_.append(layer)
-        if (probabileties):
-            for p in probabileties:
-                self._P_.append(p)
-        self._MixSample__type_check__()
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           _films_ -> list 
-           _films_[i] -> Layer
-           _P_ -> list 
-           _P_[i] -> number
-        """
-        assert isinstance(self._films_, list) , '_films_ needs to be an list'
-        for i in range(len(self._films_)):
-            assert (isinstance(self._films_[i], (BasicLayer))) , '_films_[' + str(i) + '] needs to be a Basic Layer'
-        assert isinstance(self._P_, list) , '_P_ needs to be an list'
-        for i in range(len(self._P_)):
-            assert (isinstance(self._P_[i], _NUMBER_)) , '_P_[' + str(i) + '] needs to be a Number'
-        #self.__check_P__()
-    
-    _MixSample__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def __check_P__(self):
-        """checks that the probabilities are still right"""
-        eps = 0.0001
-        assert (len(self._P_) == len(self._films_)) , 'each film needs a probability'
-        if (self._P_):
-            if (sum(self._P_) > 1.0+eps or sum(self._P_) < 1.0-eps):
-                assert (sum(self._P_) == 1.0) , 'sum of all probabilities needs to be 1 but is ' + str(sum(self._P_))    
-    
-    def _calc_reflection_(self, q, sinomega):
-        """returns the complex reflection value of the Sample.
-             
-           q: wave vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        #self.__check_P__()
-        r = 0.0 + 0.0j
-        p = 1.0 + 0.0j
-        i = 0        
-        for layer in self._films_:
-            r += layer.get_reflection(q, sinomega) * self._P_[i] * p
-            p *= layer.get_phase_shift(q, sinomega)[0]
-            i += 1
-        return r
-    
-    def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the layer"""
-        p2 = 0
-        p0 = 1
-        i = 0
-        for film in self._films_:
-            p = film.get_phase_shift(q, sinomega)
-            p0 *= p[0]
-            p2 += p[2] * self._P_[i]
-            i += 1
-        return [p0,1,p2]
-    
-    def _calc_thickness_(self):
-        """returns the thickness of the film."""
-        t = 0
-        i = 0
-        for film in self._films_:
-            t += film.get_thickness() * self._P_[i]
-            i += 1
-        return t
-    
-    def _calc_N_(self):
-        """returns the total number of layers of the Basic layer"""
-        t = 0
-        i = 0
-        for film in self._films_:
-            t += film.get_N() * self._P_[i]
-            i += 1
-        return t
-    
-    def get_c(self):
-        return self._calc_thickness_() / self._calc_N_()
-
-##################
-#  MixSampleWide #
-##################
-
-class MixSampleWide(MixSample):
-    
-    def __init__(self, films = None, probabileties = None, breadths=None):
-        """initializes the class data and checks data types
-          
-           films: different films in the Sample
-           probabileties: which part is made of which film
-           widths: width of each film
-        """
-        MixSample.__init__(self, films, probabileties)
-        self._W_ = breadths
-        self._MixSampleWide__type_check__()
-        
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           _W_ -> list 
-           _W_[i] -> number
-        """
-        assert isinstance(self._W_, list) , '_W_ needs to be an list'
-        assert len(self._W_) == len(self. _P_) , '_W_ needs as many elements as _P_'
-        for i in range(len(self._W_)):
-            assert (isinstance(self._W_[i], _NUMBER_)) , '_W_[' + str(i) + '] needs to be a Number'        
-        
-    _MixSampleWide__type_check__ = __type_check__ #private copy of the function to avoid overload    
-    
-    def _calc_reflection_(self, q, sinomega):
-        """returns the complex reflection value of the Sample.
-             
-           q: wave vector
-           sinomega: sin of angle between surface and incedent beam
-        """
-        self.__check_P__()
-        r = 0.0 + 0.0j
-        p = 1.0 + 0.0j
-        i = 0
-        W = sum(self._W_) 
-        
-        for layer in self._films_:
-            tempr = layer.get_reflection(q, sinomega)
-            e_iaq = layer._eiaq_
-            tempr *= (1-e_iaq**self._W_[i])
-            r += (tempr * self._P_[i] * p )
-            p *= mc.exp(1j * layer._iaq_.imag * self._W_[i])       
-            i += 1
-        return r / (1-mc.exp(layer._iaq_.imag * W *1j + layer._iaq_.real)) * mc.exp(layer._iaq_.real)
-
-###################
-# ComplexThinFilm #
-###################
-
-class ComplexThinFilm(MixSample):
-        
-    
-    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
-        """initializes the class data and checks data types
-          
-           crystal: SimpleCrystalStructure of the film
-           layers:  number of layers in the film
-           width: width of the gausian distribution around layers
-           filmType: the used filmtype to calculate the thinfilms
-        """
-        MixSample.__init__(self)
-        self._crystal_ = crystal
-        self._layers_ = layers
-        self._width_ = width
-        self._filmType_ = filmType  
-        self._ComplexThinFilm__type_check__()
-        self._init_P_()        
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           layers -> number
-           width -> number 
-        """
-        assert isinstance(self._layers_, _NUMBER_) , 'layers needs to be a Number'
-        assert isinstance(self._width_, _NUMBER_) , 'width needs to be a Number'
-        assert isinstance(self._crystal_, CrystalStructure) , 'crystal needs to be a CrystalStructure'
-        #assert isinstance(self.filmType, (ThinFilm)) , 'filmType needs to be a ThinFilm'
-        
-    _ComplexThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def _init_P_(self):
-        """initializes the probabilities for different Thicknesses"""
-        self._P_ = []
-        self._films_ = []
-        minimum = int(self._layers_ - 3 * self._width_) #int always rounds down
-        maximum = int(round(self._layers_ + 3 * self._width_ + 1.5)) #+0.5 to round up +1 for the range
-        summe = 0
-        for i in range(minimum, maximum):
-            value = m.exp((i - self._layers_)**2/(-2 * self._width_**2))
-            self._P_.append(value)
-            self._films_.append(self._filmType_(self._crystal_,i))
-            summe += value
-        for i in range(len(self._P_)):
-            self._P_[i] /= summe
-            
-    def _init_P_perfect(self):
-        """initializes the probabilities for different Thicknesses"""
-        self._P_ = []
-        self._films_ = []
-        p2 = self._layers_ - int(self._layers_) #probabilety for second film
-        p1 = 1-p2
-        self._P_.append(p1)
-        self._films_.append(self._filmType_(self._crystal_,int(self._layers_)))
-        self._P_.append(p2)
-        self._films_.append(self._filmType_(self._crystal_,int(self._layers_)+1))
-
-            
-########################
-# ComplexThinFilmCheck #
-########################
-
-class ComplexThinFilmCheck(BasicLayerCheck, ComplexThinFilm):    
-    
-    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
-        ComplexThinFilm.__init__(self, crystal, layers, width, ThinFilm)
-        BasicLayerCheck.__init__(self) 
- 
-#######################
-# ComplexThinFilmSave #
-#######################
-
-class ComplexThinFilmSave(BasicLayerSave, ComplexThinFilm):    
-    
-    def __init__(self, crystal, layers=1.0, width = 0.01, filmType=ThinFilm):
-        ComplexThinFilm.__init__(self, crystal, layers, width, ThinFilm)
-        BasicLayerSave.__init__(self)   
+        LayerSave.__init__(self, crystal)    
 
 ##############
 # MultiLayer #
@@ -1361,6 +1542,8 @@ class Experiment(object):
         self.direct = direct
         self.background = background
         self.wavelength = wavelength
+        self._polarisation_ = True
+        self._laue_ = True
     
     def gen_hkl(self, mini, maxi, step):
         hkl = mini
@@ -1368,19 +1551,19 @@ class Experiment(object):
             yield hkl
             hkl += step
             
-    def gen_l(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002, h = 0, k = 0, sinomegain = 0):
+    def gen_l(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002, h = 0, k = 0, sinomegain = 0.0):
         l = l_min
         q = [0,0,0]
         q[0] = h * 2 * m.pi / self.base_struc.a
         q[1] = k * 2 * m.pi / self.base_struc.b
         factor = 2 * m.pi / self.base_struc.c
-        _4pi = 1 / 4 / m.pi
+        _4pi = 1.0 / 4.0 / m.pi * self.wavelength
         while l < l_max:
             l += l_step
             q[2] = l * factor
             absq = m.sqrt(sum([x**2 for x in q]))
-            if (sinomegain == 0):
-                sinomega = absq * self.wavelength * _4pi
+            if (sinomegain == 0.0):
+                sinomega = absq  * _4pi
             else:
                 sinomega = sinomegain
             yield [q,sinomega]
@@ -1389,6 +1572,19 @@ class Experiment(object):
 
         return map(self._l_scan_, self.gen_l(l_min, l_max, l_step, h, k, sinomegain))
     
+    def qz_scan(self, qz, sinomegain = 0):
+        q = [0,0,0]
+        data = []
+        _4pi = 1.0 / 4.0 / m.pi * self.wavelength
+        for point in qz:
+            q[2] = point
+            if (sinomegain == 0.0):
+                sinomega = abs(point)  * _4pi
+            else:
+                sinomega = sinomegain
+            data.append([q[:],sinomega])
+        return map(self._l_scan_, data)
+    
     def l_scan_multi(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 0, k = 0, sinomegain = 0):
              
         pool = multi.Pool()
@@ -1396,10 +1592,17 @@ class Experiment(object):
         pool.close()
         return scans
     
-    def l_h_map(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h_min = -0.07, h_max = 0.07, h_step = 0.0007, k = 0, sinomegain = 0):
+    def l_h_map(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h_min = -0.07, h_max = 0.07, h_step = 0.0007, k = 0, sinomegain = 0.0):
         
         data = []
         for h in self.gen_hkl(h_min, h_max, h_step):
+            data.append(self.l_scan(l_min, l_max, l_step, h, k, sinomegain))
+        return data
+    
+    def l_k_map(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  k_min = -0.07, k_max = 0.07, k_step = 0.0007, h = 0, sinomegain = 0.0):
+        
+        data = []
+        for k in self.gen_hkl(k_min, k_max, k_step):
             data.append(self.l_scan(l_min, l_max, l_step, h, k, sinomegain))
         return data
             
@@ -1409,10 +1612,82 @@ class Experiment(object):
         lin = abs(self.sample.get_reflection(q, sinomega))
         lin *= lin
         lin *= self.direct
+        omeg = m.asin(sinomega) 
+        if (self._laue_):
+            lin *= 1.0/m.sin(2*omeg) #/sinomega
+        if (self._polarisation_):
+            lin *= (m.cos(2*omeg)**2) 
         lin += self.background
-        #lin *= 1/m.sin(2*m.asin(sinomega))*(1+m.cos(2*m.asin(sinomega))**2)/2/sinomega'''
-       
+    
         return [q[0], q[1], q[2], lin] 
+
+########
+# Scan #
+########
+
+class Scan(object):
+    
+    def __init__(self, path = None, N1 = 2.0, N2 = 6.0, scans1 = 10.0, scans2 = 26.0, time1 = 90.0, time2 = 440.0, scan_time = 25.95, delay = 100.0 , data=None):
+        self.N1 = N1
+        self.N2 = N2
+        self.scans1 = scans1
+        self.scans2 = scans2
+        self.time1 = time1
+        self.time2 = time2
+        self.scan_time = scan_time
+        self.delay = delay
+        if(data):
+            self._data_ = data
+        if (path):
+            self._data_ = import_scan(path)
+    
+    def __getitem__(self, index):
+        """implements the [] operator to get the data at index"""
+        return self._data_[index]
+    
+    def __len__(self):
+        return len(self._data_)
+    
+    def scan(self, index):
+        """returns the scan index"""
+        return self[index]
+    
+    def qz(self, index):
+        """returns the qz valus of scan index"""
+        return [float(a[0]*10**10) for a in self[index]]
+    
+    def int(self, index):
+        """returns the intensety values of scan index"""
+        return [float(a[1]) for a in self[index]]
+    
+    def _layer_(self, layer): 
+        """returns the scan number after layer layers were grown on the sample"""
+        Scans = self.scans1 + self.scans2
+        N = self.N1 + self.N2
+        scan = int(layer / N) * Scans
+        
+        temp = layer % N
+        if (temp == 0):
+            pass
+        elif (temp > self.N1):
+            scan += self.scans1
+            scan += int( (self.delay + self.time2 * (temp - self.N1) / self.N2) / self.scan_time) + 1
+        else:
+            scan += int( (self.delay + self.time1 * temp / self.N1) / self.scan_time) + 1
+        return scan
+            
+    def layer(self, layer): 
+        """returns the scan after layer layers were grown on the sample"""
+        return self[int(self._layer_(layer))]
+    
+    def qz_layer(self,layer):
+        """returns the qz values after layer layers were grown on the sample"""
+        return [float(a[0]*10**10) for a in self.layer(layer)]
+    
+    def int_layer(self,layer):
+        """returns the intesety values after layer layers were grown on the sample""" 
+        return [float(a[1]) for a in self.layer(layer)]
+    
     
 ##################
 # Help Functions #
@@ -1438,9 +1713,46 @@ def l_scan(sample, base_struc, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 
         lin *= direct
         lin += background
         #lin *= 1/m.sin(2*m.asin(sinomega))*(1+m.cos(2*m.asin(sinomega))**2)/2/sinomega
-        scan.append([h, k, l, lin])
+        scan.append([q[0], q[1], q[2], lin])
     
     return scan
+
+def cen(l, inte):
+    l_cen = 0
+    for x,y in zip(l,inte):
+        l_cen += x*y
+    l_cen /= sum(inte)
+    return l_cen
+
+def get_values(data_in,size=[4,200,550,-1],width=10,N=8.0):
+    data = []
+    i = 0
+    for scan in data_in:
+        inte = [y[3] for y in scan]
+        l = [y[2] for y in scan]
+        int2 = max(inte[size[2]:size[3]])
+        int1 = max(inte[size[1]:size[2]])
+        int0 = max(inte[size[0]:size[1]])
+        l0_in = inte.index(int0)
+        l1_in = inte.index(int1)
+        l2_in = inte.index(int2)
+        if (l0_in-width < size[0]):
+            l0 = cen(l[size[0]:size[0] + 2 * width + 1],inte[size[0]:size[0] + 2 * width+ 1])
+        else:
+            l0 = cen(l[l0_in-width:l0_in + width + 1],inte[l0_in-width:l0_in + width + 1])
+        l1 = cen(l[l1_in-width:l1_in + width + 1],inte[l1_in-width:l1_in + width + 1])
+        l2 = cen(l[l2_in-width:l2_in + width + 1],inte[l2_in-width:l2_in + width + 1])
+        c0 = 2*m.pi/l0
+        c12 = 2*m.pi/(2*l1-l2)
+        L01 = 2*m.pi/(l0-l1)
+        L12 = 2*m.pi/(l1-l2)
+        N011 = L01/c0
+        N121 = L12/c0
+        N012 = L01/c12
+        N122 = L12/c12
+        data.append([i,i/N,l0,l1,l2,c0,c12,L01,L12,N011,N012,N121,N122,int0,int1,int2])
+        i += 1
+    return data
 
 def lcm(a,b): 
     return abs(a * b) / fractions.gcd(a,b) if a and b else 0 
@@ -1624,16 +1936,16 @@ def load_sim(path):
     f.close()
     return data
 
-def load_data(path):
+def load_data(path, row1 = 0, row2 = 1, separator=' '):
     data = []
     f = open(path, 'r')
     line=f.readline()
     line=f.readline()
     while (line):
-        words = line.split(' ')
+        words = line.split(separator)
         if words:
             if (len(words) > 1):
-                data.append([words[0],words[1]])
+                data.append([words[row1],words[row2]])
         line=f.readline()
     f.close()
     return data
@@ -1653,22 +1965,28 @@ def load_scan(path, scan_number):
     f.close()
     return data
 
-def import_scan(path, row1 = 1, row2 = 3):
+def import_scan(path, row1 = 1, row2 = 3, separator=','):
     data = []
     data.append([])
     f = open(path, 'r')
     line = f.readline()
     line = f.readline()
+    offset = 0
     while (line):
-        words = line.split(',')
+        words = line.split(separator)
         if words:
             if (len(words) > 1):
                 try:
-                    data[int(words[0])].append([float(words[row1]),float(words[row2])])  
+                    data[int(words[0])-offset].append([float(words[row1]),float(words[row2]),float(words[0])])  
                 except:
                     data.append([])
-                    data[int(words[0])].append([float(words[row1]),float(words[row2])])
+                    if (int(words[0])-offset >= len(data)):
+                        offset = int(words[0])-len(data)+1
+                    data[int(words[0])-offset].append([float(words[row1]),float(words[row2]),float(words[0])])
         line=f.readline()
     f.close()
     return data
+
+def get_c2(c,c1, n1 = 6, n2 = 2):
+    return (c * (n2 + n1) - n1 * c1) / n2 
 

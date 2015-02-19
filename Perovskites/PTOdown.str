@@ -7,18 +7,18 @@ y 0
 z 1
 element Ti
 x 0.5
-y 0.6
+y 0.4
 z 0.5
 element O
 x 0.5
 y 0.5
-z 1.1
+z 0.9
 element O
 x 0
 y 0.5
-z 0.6
+z 0.4
 element O
 x 0.5
 y 0
-z 0.6
+z 0.4
 

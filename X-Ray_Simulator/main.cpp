@@ -1,8 +1,12 @@
 #include "main.h"
+#include <ctime>
 
 
 int main(int argc, char* argv[])
+
 {
+	clock_t t;
+	t = clock();
 	std::string experiment_path = std::string(argv[1]);
 
 	//scan constants
@@ -14,9 +18,9 @@ int main(int argc, char* argv[])
 	double k_max = 0.0005;
 	double k_step = 0.0005;
 
-	double l_min = 0.9;
+	double l_min = 0.8;
 	double l_max = 1.05;
-	double l_step = 0.001;
+	double l_step = 0.0005;
 
 	double lambda = 1.5409E-10;
 	double direct = 1.5E8;
@@ -155,9 +159,11 @@ int main(int argc, char* argv[])
 				lin *= lin;
 				lin *= direct;
 				lin += background;
-				std::cout << h << " " << k << " " << l << " " << lin << " " << log10(lin) << std::endl;
+				//std::cout << h << " " << k << " " << l << " " << lin << " " << log10(lin) << std::endl;
 			}
 			//std::cout << std::endl;
 		}
 	}
+	t = clock() - t;
+	printf ("It took me %d clicks (%f seconds).\n",t,((float)t)/CLOCKS_PER_SEC);
 }}
