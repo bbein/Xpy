@@ -10,9 +10,8 @@ for i in range(len(words)):
     if ( i == len(words)-3): break
     _SCRIPTPATH_ += words[i]+"/"
     
-_NUMBER_ = (int, float) # np is not working in 3.3 yet ,np.floating, np.integer)
-
-
+#constant to hold used kinds of numbers
+_NUMBER_ = (int, float) 
 
 ########
 # Atom #
@@ -340,8 +339,8 @@ class CrystalStructure(object):
             multi = 0.0
             for i in range(3):
                 multi += -1j * (1 - atom.pos[i]) * self._lattice_parameters_[i] * q[i] 
-            structure_factor +=(atom.form.get_value(q2) * atom.N *
-                                mc.exp(-atom.B * q2 + multi - damp * (1 - atom.pos[2]))     
+            structure_factor +=(atom.form.get_value(q2) * atom.N * #Form factor * fill factor
+                                mc.exp(-atom.B * q2 + multi - damp * (1 - atom.pos[2])) #Deby Waller Factor and Damping    
                                )
         return structure_factor
                   
@@ -1073,463 +1072,7 @@ class ComplexThikFilm(MixSample):
         self._films_.append(self._filmType_(self._cell_,int(self._layers_)+1))
  
     
-##############
-# BasicLayer #
-##############
-
-class BasicLayer(object):
-        
-    def __init__(self):
-        """initializes the class data and checks data types"""
-        pass
-        
-    def _calc_reflection_(self, q, sinomega):
-        """calculates the complex reflection value of the Basic Layer."""
-        return 1
     
-    def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the Basic layer
-        
-            q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        return [1,1,1]
-        
-    def _calc_thickness_(self):
-        """returns the thickness of the Basic Layer"""
-        return 1
-    
-    def _calc_N_(self):
-        """returns the total number of layers of the Basic layer"""
-        return 1
-    
-    def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Film.
-             
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        return self._calc_reflection_(q, sinomega)
-    
-    def get_phase_shift(self, q, sinomega):
-        """returns the phase of the film.
-
-           q: scattering vector
-           sinomega: sin angle between surface plane and incedent beam 
-        """
-        return self._calc_phase_shift_(q, sinomega)
-    
-    def get_thickness(self):
-        """returns the thickness of the film."""
-        return self._calc_thickness_()
-    
-    def get_N(self):
-        """returns the total number of layers of the Basic layer"""
-        return self._calc_N_()
-
-###################
-# BasicLayerCheck #
-###################
-
-class BasicLayerCheck(BasicLayer):
-    
-    def __init__(self):
-        self._q_ = [0,0,0]
-        self._sinomega_ = 0.0
-        self._reflection_ = 0.0 + 0.0j
-        self._phase_shift_ = [0.0 + 0.0j,0.0j,0.0j]
-    
-    def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Basic Layer.
-             
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        self._check_q_s_(q, sinomega)
-        return self._reflection_
-    
-    def get_phase_shift(self, q, sinomega):
-        """returns the phase of the film.
-
-           q: scattering vector
-           sinomega: sin angle between surface plane and incedent beam 
-        """
-        self._check_q_s_(q, sinomega)
-        return self._phase_shift_
-    
-    def _check_q_s_(self, q, sinomega):
-        """checks if q or sinomega are changed.
-        
-           q: scattering vector
-           sinomega: sin(angle between incident beam and sample surface 
-        """
-        #assert isinstance(q,self._q_.__class__), 'q needs to be ' + str(self._q_.__class__)
-        #assert isinstance(sinomega,self._sinomega_.__class__), 'sinomega needs to be ' + str(self._sinomega_.__class__)
-        if ( (self._q_ != q) or 
-             (self._sinomega_ != sinomega) ):
-            self._q_ = q[:]
-            self._sinomega_ = sinomega
-            self._reflection_ = self._calc_reflection_(q, sinomega)
-            self._phase_shift_ = self._calc_phase_shift_(q, sinomega)
-            return True
-        return False
-
-##################
-# BasicLayerSave #
-##################
-
-class BasicLayerSave(BasicLayer):
-    
-    def __init__(self):
-        self._data_ = []
-        self._reflection_ = []
-        self._phase_shift_ = []
-        self._counter_ = 0
-        
-    def _check_q_s_(self, q, sinomega):
-        """checks if q or sinomega are changed.
-        
-           q: scattering vector
-           sinomega: sin(angle between incident beam and sample surface""" 
-        values = [q[:], sinomega]
-        self._counter_ += 1
-        try:
-            if (values == self._data_[self._counter_]): #exception if counter bigger than list
-                pass
-            elif (values == self._data_[self._counter_-1]):
-                self._counter_ -= 1
-            else:                
-                self._counter_ = self._data_.index(values) #exception if values not in data
-        except:
-            self._data_.append([q[:], sinomega])
-            self._reflection_.append(self._calc_reflection_(q, sinomega))
-            self._phase_shift_.append(self._calc_phase_shift_(q, sinomega))
-            self._counter_ = (len(self._data_) - 2) #makes sure that every data set gets checked
-            return self._counter_ + 1
-        return self._counter_
-        
-    def get_reflection(self, q, sinomega):
-        """returns the complex reflection value of the Basic Layer.
-             
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        return self._reflection_[self._check_q_s_(q, sinomega)]
-    
-    def get_phase_shift(self, q, sinomega):
-        """returns the phase of the Basic Layer.
-
-           q: scattering vector
-           sinomega: sin angle between surface plane and incedent beam 
-        """
-        return self._phase_shift_[self._check_q_s_(q, sinomega)][:]
-
-#########
-# Layer #
-#########
-
-class Layer(BasicLayer):
-        
-    def __init__(self, crystal):
-        """initializes the class data and checks data types
-          
-           crystal CrystalStructure of the film 
-        """
-        BasicLayer.__init__(self)
-        self.crystal= crystal
-        self._icq_ = self._ibq_ = self._iaq_ = 0.0
-        self._eiaq_ = self._eibq_ = self._eicq_ = 0.0
-        self._damping_ = 0.0
-        self.delta = 0.0
-        
-        self._Layer__type_check__()
-    
-    def __str__(self):
-        """Returns the data in a structured form.
-           
-           returns its crystal structure 
-        """
-        return self.crystal.__str__()
-    
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           crystal -> Crystalstructure 
-        """
-        #assert isinstance(self.crystal, CrystalStructure) , 'crystal needs to be a SimpleCrystalstructure'
-        
-    _Layer__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def _set_icq_(self, q, sinomega):
-        """recalculates the values for i*(latticeparameters*q)"""                   
-        a = self.crystal.a
-        b = self.crystal.b
-        c = self.crystal.c
-        factor = self.crystal.damping * c / sinomega
-        self._iaq_ = -1J * a * q[0]
-        self._ibq_ = -1J * b * q[1] 
-        self._icq_ = -1J * c * q[2]
-        self._eiaq_ = mc.exp(self._iaq_)
-        self._eibq_ = mc.exp(self._ibq_)
-        self._eicq_ = mc.exp(self._icq_)
-        self._damping_ = mc.exp(-factor)
-    
-    def _calc_amplitude_(self, q):
-        """returns calculates the scattering amplitude"""
-        a = self.crystal.a
-        b = self.crystal.b
-        R = 2.1879e-15 #R= 2.1879e-15 is the classical electron radius
-        amp1d = 4 * m.pi * R / a / b #/ m.sqrt(sum([x**2 for x in q]))
-        return amp1d 
-    
-    def _calc_reflection_(self, q, sinomega):
-        """calculates the complex reflection value of the Film."""
-        self._set_icq_(q, sinomega)
-        amp = self._calc_amplitude_(q)
-        r = (amp * self.crystal.get_structure_factor(q, sinomega) / 
-             ((1 - self._eiaq_ * self._damping_) * 
-              (1 - self._eibq_ * self._damping_)
-             )             
-            )
-        return r
-    
-    def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the layer
-        
-            q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        return [self._eiaq_, 
-                self._eibq_, 
-                mc.exp(self.delta * self._icq_)*self._eicq_*self._damping_
-               ]
-    
-    def _calc_thickness_(self):
-        """returns the thickness of the film."""
-        return (1 + self.delta)*self.crystal.c
-
-##############
-# LayerCheck #
-##############
-
-class LayerCheck(Layer, BasicLayerCheck):
-    
-    def __init__(self, crystal):
-        Layer.__init__(self, crystal)
-        BasicLayerCheck.__init__(self)
-
-#############
-# LayerSave #
-#############
-
-class LayerSave(Layer, BasicLayerSave):
-    
-    def __init__(self, crystal):
-        Layer.__init__(self, crystal)
-        BasicLayerSave.__init__(self)          
-
-#############
-# ThickFilm #
-#############
- 
-class ThickFilm (Layer):    
-    
-    def _set_icq_(self,  q, sinomega):
-        """recalculates the values for i*(latticeparameters*q*n)"""
-        super(self.__class__, self)._set_icq_(q, sinomega)
-        self._damping2_ = self._damping_
-        self._damping_ = 0.9999999
-    
-    def _calc_reflection_(self, q, sinomega):
-        """calculates the complex reflection value of the Thick Film."""
-        r = Layer._calc_reflection_(self, q, sinomega)
-        r *= 1 / (1 - self._eicq_ * self._damping2_) * (1-self._damping_)**2
-        #r = 2 * r / (1 + m.sqrt(1 + 4 * abs(r**2)))
-        return r
-
-##################
-# ThickFilmCheck #
-##################
-
-class ThickFilmCheck (LayerCheck, ThickFilm):
-    pass
-
-#################
-# ThickFilmSave #
-#################
-
-class ThickFilmSave (LayerSave, ThickFilm):
-    pass
-
-############
-# ThinFilm #
-############
-
-class ThinFilm(Layer):
-
-    def __init__(self, crystal, layers=0, breath=0, width=0):
-        """initializes the class data and checks data types
-          
-           crystal: SimpleCrystalStructure of the film
-           layers:  number of layers in the film
-        """
-        super(self.__class__, self).__init__(crystal)
-        self._layers_ = layers
-        self._breath_ = breath
-        self._width_ = width
-        self._ianq_ = self._ibnq_ = self._icnq_ = 0.0+0.0j
-        self._eianq_ = self._eibnq_ = self._eicnq_ = 0.0+0.0j   
-        self._ThinFilm__type_check__()
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           layers -> int 
-        """
-        assert isinstance(self._layers_, (int)) , 'layers needs to be a int'
-        
-    _ThinFilm__type_check__ = __type_check__ #private copy of the function to avoid overload
-    
-    def _set_icq_(self,  q, sinomega):
-        """recalculates the values for i*(latticeparameters*q*n)"""
-        super(ThinFilm, self)._set_icq_(q, sinomega)
-        self._ianq_ =  self._breath_ * self._iaq_
-        self._ibnq_ =  self._width_  * self._ibq_
-        self._icnq_ =  self._layers_ * self._icq_
-        self._eianq_ = self._eiaq_**self._breath_ if self._breath_ > 0 else 0 
-        self._eibnq_ = self._eibq_**self._width_  if self._width_ > 0 else 0 
-        self._eicnq_ = self._eicq_**self._layers_ if self._layers_ > 0 else 0 
-    
-    def _calc_reflection_(self, q, sinomega):
-        """calculates the reflection and phase shift of the Film."""
-        r = Layer._calc_reflection_(self, q, sinomega)
-        r *= ((1 - self._eianq_ * self._damping_ ** self._breath_) * 
-              (1 - self._eibnq_ * self._damping_ ** self._width_)  *
-              (1 - self._eicnq_ * self._damping_ ** self._layers_) / 
-              (1 - self._eicq_ * self._damping_)
-             )
-        return r      
-
-    def _calc_phase_shift_(self, q, sinomega):
-        """returns the phase shift of the layer"""
-        return [self._eianq_ * self._damping_ ** self._breath_,
-                self._eibnq_ * self._damping_ ** self._width_, 
-                self._eicnq_ * self._damping_** self._layers_
-               ]
-    
-    def _calc_thickness_(self):
-        """returns the thickness of the film."""
-        return (self._layers_ + self.delta)*self.crystal.c
-    
-    def _calc_N_(self):
-        """returns the total number of layers of the Basic layer"""
-        return self._layers_
-
-#################
-# ThinFilmCheck #
-#################
-
-class ThinFilmCheck(LayerCheck, ThinFilm):    
-    
-    def __init__(self, crystal, layers=1, breath=0, width=0):
-        ThinFilm.__init__(self, crystal, layers, breath, width)
-        LayerCheck.__init__(self, crystal)
-        
-################
-# ThinFilmSave #
-################
-
-class ThinFilmSave(LayerSave, ThinFilm):    
-    
-    def __init__(self, crystal, layers=1, breath=0, width=0):
-        ThinFilm.__init__(self, crystal, layers, breath, width)
-        LayerSave.__init__(self, crystal)    
-
-##############
-# MultiLayer #
-##############
-
-class Multilayer(Sample):
-    
-    def __init__(self, film1 = None, film2 = None, film3 = None, films = None):
-        Sample.__init__(self, substrate=film1, electrode=film2, film=film3, layers=films)
-        
-    def get_c(self):
-        return self.get_thickness()/self.get_N()    
-       
-################
-# SuperLattice #
-################
-
-class SuperLattice(Multilayer):
-        
-    def __init__(self, film1 = None, film2 = None, film3 = None, films = None, bilayers=1):
-        
-        """initializes the class data and checks data types
-          
-           film1: first film of the superlattice 
-           film2: second film of the superlattice 
-           bilayers: number of times both films get repeted
-        """
-        Sample.__init__(self, substrate=film1, electrode=film2, film=film3, layers=films)
-        self.bilayers = bilayers
-        self._SuperLattice__type_check__()
-        
-    def __type_check__(self):
-        """checks the class data to have the right types
-        
-           bilayers -> int 
-
-        """
-        assert isinstance(self.bilayers, (int)) , 'bilayers needs to be an int'
-    
-    _SuperLattice__type_check__ = __type_check__ #private copy of the function to avoid overload
-       
-    def _calc_phase_shift_(self,  q, sinomega):
-        """returns the phase of the Superlattice.
-
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        p = Multilayer._calc_phase_shift_(self, q, sinomega)
-        return [p[0], p[1], p[2] ** self.bilayers]
-    
-    def _calc_reflection_(self, q, sinomega):
-        """returns the complex reflection value of the Superlattice.
-             
-           q: wave vector
-           sinomega: sin(angle between incident beam and sample surface
-        """
-        r = Multilayer._calc_reflection_(self, q, sinomega)
-        p = Multilayer._calc_phase_shift_(self, q, sinomega)[2]
-        reflection = 0.0 + 0.0j
-        phase = 1.0
-        for i in range(self.bilayers):
-            reflection += (r * phase)
-            phase *= p
-        return reflection
-    
-    def _calc_thickness_(self):
-        """returns the total thickness of the superlatice"""
-        return self.get_multilayer_thickness() *self.bilayers
-    
-    def _calc_N_(self):
-        """returns the total number of layers in the Superlattice"""
-        return self.get_n() * self.bilayers
-    
-    def get_c(self):
-        """returns the average c lattice parameter"""
-        return self.get_multilayer_thickness() / self.get_n()
-    
-    def get_multilayer_thickness(self):
-        """returns the Bilayer thickness of the superlatice"""
-        return Multilayer._calc_thickness_(self)
-    
-    def get_n(self):
-        """returns the number of layers per multilayer"""
-        return Multilayer._calc_N_(self)
-    
-
 ##############
 # Experiment #
 ##############
@@ -1570,7 +1113,7 @@ class Experiment(object):
     
     def l_scan(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 0, k = 0, sinomegain = 0):
 
-        return map(self._l_scan_, self.gen_l(l_min, l_max, l_step, h, k, sinomegain))
+        return list(map(self._l_scan_, self.gen_l(l_min, l_max, l_step, h, k, sinomegain)))
     
     def qz_scan(self, qz, sinomegain = 0):
         q = [0,0,0]
@@ -1583,7 +1126,7 @@ class Experiment(object):
             else:
                 sinomega = sinomegain
             data.append([q[:],sinomega])
-        return map(self._l_scan_, data)
+        return list(map(self._l_scan_, data))
     
     def l_scan_multi(self, l_min = 0.8, l_max = 1.05, l_step = 0.0002,  h = 0, k = 0, sinomegain = 0):
              
@@ -1801,8 +1344,8 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
     random.seed()
     L1 = get_multi(l1)
     L2 = get_multi(l2)
-    L = lcm(L1,L2)
-    layers = bl*(l1+l2)
+    L = int(lcm(L1,L2))
+    layers = int(bl*(l1+l2))
     if (float(int(layers)) == layers):
         layers = int(layers)
     else:
@@ -1884,7 +1427,7 @@ def create_structure(a_in, c_in, a11 ,a12 ,a21 ,a22, l1, l2, bl, size = 0.0, zof
 def showup(l1, l2):
     L1 = get_multi(l1)
     L2 = get_multi(l2)
-    L = lcm(L1,L2)
+    L = int(lcm(L1,L2))
     bl = get_multi((l1+l2))
     layers = float(bl)*(l1+l2)
     
@@ -1896,7 +1439,7 @@ def showup(l1, l2):
     offset = 0
     result = ''
     for i in range(layers):
-        for j in range(L):
+        for j in range(int(L)):
             #check that the right atom is printed
             if (i*L+j - offset >= l*L):
                 if (atom == 1):
